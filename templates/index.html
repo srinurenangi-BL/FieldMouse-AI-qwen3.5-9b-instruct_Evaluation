@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Code Reviewer — Apple Glassy Studio</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        /* ── Apple Muted CSS Variable System ── */
+        [data-theme="dark"] {
+            --bg-canvas: #090B10;
+            --glass-bg: rgba(18, 24, 38, 0.55);
+            --glass-card: rgba(12, 16, 26, 0.65);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --glass-border-hover: rgba(255, 255, 255, 0.18);
+            --accent-blue: #0A84FF;
+            --accent-blue-soft: rgba(10, 132, 255, 0.12);
+            --accent-green: #30D158;
+            --accent-amber: #FF9500;
+            --accent-red: #FF453A;
+            --text-main: #F5F5F7;
+            --text-sub: #8E8E93;
+            --input-bg: rgba(9, 12, 19, 0.85);
+            --code-bg: rgba(7, 9, 14, 0.95);
+            --code-text: #93C5FD;
+            --orb-opacity: 0.06;
+        }
+
+        [data-theme="light"] {
+            --bg-canvas: #F5F5F7;
+            --glass-bg: rgba(255, 255, 255, 0.75);
+            --glass-card: rgba(255, 255, 255, 0.85);
+            --glass-border: rgba(0, 0, 0, 0.08);
+            --glass-border-hover: rgba(0, 0, 0, 0.16);
+            --accent-blue: #0071E3;
+            --accent-blue-soft: rgba(0, 113, 227, 0.08);
+            --accent-green: #34C759;
+            --accent-amber: #FF9500;
+            --accent-red: #FF3B30;
+            --text-main: #1D1D1F;
+            --text-sub: #86868B;
+            --input-bg: rgba(255, 255, 255, 0.9);
+            --code-bg: #1D1D1F;
+            --code-text: #E0F2FE;
+            --orb-opacity: 0.04;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; transition: background 0.3s ease, border-color 0.3s ease, color 0.3s ease, box-shadow 0.3s ease; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
+            background-color: var(--bg-canvas);
+            color: var(--text-main);
+            min-height: 100vh;
+            padding: 30px 20px;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            -webkit-font-smoothing: antialiased;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        /* ── Ambient Floating Mesh Lighting ── */
+        .ambient-mesh {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            pointer-events: none;
+            z-index: 0;
+            overflow: hidden;
+        }
+
+        .orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(90px);
+            opacity: var(--orb-opacity);
+            animation: floatOrb 22s ease-in-out infinite alternate;
+        }
+
+        .orb-1 {
+            width: 550px;
+            height: 550px;
+            background: radial-gradient(circle, var(--accent-blue) 0%, transparent 70%);
+            top: -150px;
+            left: 15%;
+        }
+
+        .orb-2 {
+            width: 480px;
+            height: 480px;
+            background: radial-gradient(circle, #6366F1 0%, transparent 70%);
+            bottom: -120px;
+            right: 15%;
+            animation-duration: 28s;
+            animation-direction: alternate-reverse;
+        }
+
+        @keyframes floatOrb {
+            0% { transform: translateY(0) scale(1) rotate(0deg); }
+            50% { transform: translateY(40px) scale(1.06) rotate(6deg); }
+            100% { transform: translateY(-25px) scale(0.96) rotate(-6deg); }
+        }
+
+        .container {
+            max-width: 1140px;
+            width: 100%;
+            position: relative;
+            z-index: 1;
+            animation: pageFade 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        @keyframes pageFade {
+            0% { opacity: 0; transform: translateY(16px); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ── Header Bar & Day/Night Toggle Switch ── */
+        header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 32px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        .header-brand h1 {
+            font-size: 28px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            color: var(--text-main);
+        }
+
+        .header-brand p.subtitle {
+            color: var(--text-sub);
+            font-size: 14px;
+            font-weight: 400;
+            margin-top: 2px;
+        }
+
+        /* Apple Glassy Theme Switcher Toggle */
+        .theme-toggle-btn {
+            background: var(--glass-bg);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            color: var(--text-main);
+            padding: 8px 16px;
+            border-radius: 9999px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .theme-toggle-btn:hover {
+            border-color: var(--glass-border-hover);
+            transform: translateY(-1px);
+        }
+
+        .layout-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+        }
+
+        @media (max-width: 900px) {
+            .layout-grid { grid-template-columns: 1fr; }
+            header { flex-direction: column; align-items: flex-start; gap: 16px; }
+        }
+
+        /* ── Minimalist Glass Panel ── */
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(25px) saturate(180%);
+            -webkit-backdrop-filter: blur(25px) saturate(180%);
+            border: 1px solid var(--glass-border);
+            border-radius: 18px;
+            padding: 24px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+        }
+
+        .glass-panel:hover {
+            border-color: var(--glass-border-hover);
+        }
+
+        .panel-title {
+            font-size: 14.5px;
+            font-weight: 600;
+            letter-spacing: -0.2px;
+            color: var(--text-main);
+            margin-bottom: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        label {
+            display: block;
+            font-size: 11.5px;
+            font-weight: 600;
+            color: var(--text-sub);
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        textarea {
+            width: 100%;
+            background: var(--input-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            color: var(--text-main);
+            padding: 14px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
+            font-size: 13.5px;
+            line-height: 1.5;
+            outline: none;
+            resize: vertical;
+        }
+
+        textarea:focus {
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.18);
+        }
+
+        textarea.code-area {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            min-height: 260px;
+            white-space: pre;
+        }
+
+        /* Submit Button */
+        .btn-submit {
+            width: 100%;
+            background: var(--accent-blue);
+            color: #FFFFFF;
+            border: none;
+            padding: 14px;
+            font-size: 14px;
+            font-weight: 600;
+            border-radius: 12px;
+            cursor: pointer;
+            box-shadow: 0 4px 16px rgba(10, 132, 255, 0.25);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-submit:hover {
+            opacity: 0.94;
+            box-shadow: 0 6px 22px rgba(10, 132, 255, 0.35);
+        }
+
+        .btn-submit:active {
+            transform: scale(0.985);
+        }
+
+        /* ── Stunning SVG Radial Score Meters ── */
+        .score-hero-container {
+            display: flex;
+            align-items: center;
+            justify-content: space-around;
+            background: var(--glass-card);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 22px;
+        }
+
+        .radial-meter {
+            position: relative;
+            width: 100px;
+            height: 100px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .radial-meter svg {
+            width: 100px;
+            height: 100px;
+            transform: rotate(-90deg);
+        }
+
+        .radial-meter circle {
+            fill: none;
+            stroke-width: 8;
+            stroke-linecap: round;
+        }
+
+        .circle-bg {
+            stroke: var(--glass-border);
+        }
+
+        .circle-progress {
+            stroke: var(--accent-blue);
+            stroke-dasharray: 264;
+            stroke-dashoffset: 264;
+            transition: stroke-dashoffset 1.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .radial-center {
+            position: absolute;
+            text-align: center;
+        }
+
+        .radial-val {
+            font-size: 24px;
+            font-weight: 800;
+            color: var(--accent-blue);
+            line-height: 1;
+        }
+
+        .radial-lbl {
+            font-size: 10px;
+            color: var(--text-sub);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-top: 4px;
+        }
+
+        .score-pills {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            flex-grow: 1;
+            max-width: 260px;
+        }
+
+        .pill-item {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .pill-info {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .pill-track {
+            background: var(--glass-border);
+            height: 7px;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .pill-fill {
+            height: 100%;
+            border-radius: 4px;
+            width: 0%;
+            background: var(--accent-blue);
+            transition: width 1.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        /* ── Report Elements ── */
+        .empty-placeholder {
+            text-align: center;
+            padding: 90px 20px;
+            color: var(--text-sub);
+            font-size: 14px;
+        }
+
+        .feedback-box {
+            background: var(--accent-blue-soft);
+            border: 1px solid rgba(10, 132, 255, 0.2);
+            border-radius: 12px;
+            padding: 14px 16px;
+            margin-bottom: 18px;
+            font-size: 13.5px;
+            line-height: 1.5;
+            color: var(--text-main);
+        }
+
+        .diag-section {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 18px;
+        }
+
+        .diag-item {
+            background: var(--glass-card);
+            border: 1px solid var(--glass-border);
+            border-radius: 10px;
+            padding: 12px 14px;
+            font-size: 13px;
+        }
+
+        .diag-tag {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+
+        .diag-tag.err { color: var(--accent-red); }
+        .diag-tag.str { color: var(--accent-green); }
+        .diag-tag.weak { color: var(--accent-amber); }
+        .diag-tag.rec { color: var(--accent-blue); }
+
+        pre.code-block {
+            background: var(--code-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            padding: 14px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12.5px;
+            color: var(--code-text);
+            overflow-x: auto;
+            white-space: pre-wrap;
+            position: relative;
+        }
+
+        .btn-copy-mini {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: rgba(255, 255, 255, 0.15);
+            border: none;
+            color: #FFFFFF;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            cursor: pointer;
+        }
+
+        .btn-copy-mini:hover {
+            background: rgba(255, 255, 255, 0.25);
+        }
+
+        /* Minimal Dual Ring Loader */
+        .loader-wrap {
+            display: none;
+            text-align: center;
+            padding: 85px 20px;
+        }
+
+        .dual-ring {
+            width: 44px;
+            height: 44px;
+            border: 3px solid rgba(10, 132, 255, 0.15);
+            border-top: 3px solid var(--accent-blue);
+            border-radius: 50%;
+            animation: spin 0.85s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+            margin: 0 auto 16px;
+        }
+
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        @keyframes fadeIn { 0% { opacity: 0; transform: translateY(8px); } 100% { opacity: 1; transform: translateY(0); } }
+
+        .report-stagger {
+            animation: fadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+    </style>
+</head>
+<body>
+
+<div class="ambient-mesh">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+</div>
+
+<div class="container">
+    <header>
+        <div class="header-brand">
+            <h1>Code Reviewer Pro</h1>
+            <p class="subtitle">Evidence-based code evaluation & constraint verification engine</p>
+        </div>
+
+        <button type="button" class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()">
+            <span id="themeIcon">☀️</span>
+            <span id="themeText">Light Mode</span>
+        </button>
+    </header>
+
+    <div class="layout-grid">
+        <!-- Input Form Panel -->
+        <div class="glass-panel">
+            <div class="panel-title">
+                <span>Submission</span>
+            </div>
+
+            <form id="reviewForm">
+                <div class="form-group">
+                    <label for="problem">Question Statement</label>
+                    <textarea id="problem" name="problem" placeholder="Enter problem statement and constraints..." required></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="code">Code Submission</label>
+                    <textarea id="code" name="code" class="code-area" placeholder="Paste source code here..." required></textarea>
+                </div>
+
+                <button type="submit" class="btn-submit">Evaluate Submission</button>
+            </form>
+        </div>
+
+        <!-- Evaluation Report Panel -->
+        <div class="glass-panel">
+            <div class="panel-title">
+                <span>Evaluation Report</span>
+            </div>
+
+            <div id="emptyState" class="empty-placeholder">
+                <p>Submit code on the left to generate the evaluation report.</p>
+            </div>
+
+            <div id="loader" class="loader-wrap">
+                <div class="dual-ring"></div>
+                <p style="font-size: 13.5px; font-weight: 500; color: var(--text-sub);">Auditing sentence-by-sentence constraints...</p>
+            </div>
+
+            <div id="reportContent" style="display: none;" class="report-stagger">
+                <!-- Radial Score Meter Hero -->
+                <div class="score-hero-container">
+                    <div class="radial-meter">
+                        <svg viewBox="0 0 100 100">
+                            <circle class="circle-bg" cx="50" cy="50" r="42"></circle>
+                            <circle id="radialProgressCircle" class="circle-progress" cx="50" cy="50" r="42"></circle>
+                        </svg>
+                        <div class="radial-center">
+                            <div id="overallVal" class="radial-val">0.0</div>
+                            <div class="radial-lbl">Overall</div>
+                        </div>
+                    </div>
+
+                    <div class="score-pills">
+                        <div class="pill-item">
+                            <div class="pill-info"><span>Completeness</span><span id="compVal">0.0</span></div>
+                            <div class="pill-track"><div id="compFill" class="pill-fill"></div></div>
+                        </div>
+                        <div class="pill-item">
+                            <div class="pill-info"><span>Code Quality</span><span id="qualVal">0.0</span></div>
+                            <div class="pill-track"><div id="qualFill" class="pill-fill"></div></div>
+                        </div>
+                        <div class="pill-item">
+                            <div class="pill-info"><span>Approach & Constraints</span><span id="apprVal">0.0</span></div>
+                            <div class="pill-track"><div id="apprFill" class="pill-fill"></div></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Feedback -->
+                <label>Feedback</label>
+                <div id="feedbackText" class="feedback-box"></div>
+
+                <!-- Diagnostics -->
+                <div class="diag-section">
+                    <div class="diag-item">
+                        <div class="diag-tag err">Common Errors / Constraints</div>
+                        <div id="errorsText"></div>
+                    </div>
+                    <div class="diag-item">
+                        <div class="diag-tag str">Strengths</div>
+                        <div id="strengthsText"></div>
+                    </div>
+                    <div class="diag-item">
+                        <div class="diag-tag weak">Weaknesses</div>
+                        <div id="weaknessesText"></div>
+                    </div>
+                    <div class="diag-item">
+                        <div class="diag-tag rec">Recommendations</div>
+                        <div id="recsText"></div>
+                    </div>
+                </div>
+
+                <!-- Corrected Reference Code -->
+                <label>Reference Solution</label>
+                <div style="position: relative;">
+                    <button type="button" class="btn-copy-mini" id="copyBtn" onclick="copyCode()">Copy</button>
+                    <pre id="correctedCodeText" class="code-block"></pre>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<script>
+    let referenceCode = '';
+
+    // ── Day / Night Theme Switcher Logic ──
+    function initTheme() {
+        const savedTheme = localStorage.getItem('lms_theme') || 'dark';
+        applyTheme(savedTheme);
+    }
+
+    function applyTheme(theme) {
+        document.documentElement.setAttribute('data-theme', theme);
+        localStorage.setItem('lms_theme', theme);
+        const icon = document.getElementById('themeIcon');
+        const text = document.getElementById('themeText');
+        if (theme === 'dark') {
+            icon.textContent = '☀️';
+            text.textContent = 'Light Mode';
+        } else {
+            icon.textContent = '🌙';
+            text.textContent = 'Dark Mode';
+        }
+    }
+
+    function toggleTheme() {
+        const current = document.documentElement.getAttribute('data-theme');
+        applyTheme(current === 'dark' ? 'light' : 'dark');
+    }
+
+    initTheme();
+
+    // ── Radial SVG Score Ring & Counter Animation ──
+    function animateRadialScore(targetVal) {
+        const circle = document.getElementById('radialProgressCircle');
+        const valEl = document.getElementById('overallVal');
+        
+        // Full perimeter for r=42 is ~263.89
+        const perimeter = 264;
+        const targetOffset = perimeter - (perimeter * (targetVal / 10.0));
+        
+        circle.style.strokeDashoffset = targetOffset;
+
+        // Numerical Count Up
+        let start = 0;
+        const duration = 1000;
+        const startTime = performance.now();
+
+        function update(now) {
+            const elapsed = now - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+            const easeProgress = 1 - Math.pow(1 - progress, 3);
+            valEl.textContent = (easeProgress * targetVal).toFixed(1);
+
+            if (progress < 1) {
+                requestAnimationFrame(update);
+            }
+        }
+        requestAnimationFrame(update);
+    }
+
+    document.getElementById('reviewForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const problem = document.getElementById('problem').value;
+        const code = document.getElementById('code').value;
+
+        document.getElementById('emptyState').style.display = 'none';
+        document.getElementById('reportContent').style.display = 'none';
+        document.getElementById('loader').style.display = 'block';
+
+        try {
+            const resp = await fetch('/api/v1/review', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    language: 'Java',
+                    submissions: [
+                        {
+                            question_text: problem,
+                            code: code
+                        }
+                    ]
+                })
+            });
+
+            const data = await resp.json();
+            
+            document.getElementById('loader').style.display = 'none';
+            document.getElementById('reportContent').style.display = 'block';
+
+            const item = (data.individual_reviews && data.individual_reviews[0]) ? data.individual_reviews[0] : {};
+            const scores = item.scores || {};
+
+            const overall = scores.overall_score || 0.0;
+            const comp = scores.completeness_score || 0.0;
+            const qual = scores.code_quality_score || 0.0;
+            const appr = scores.approach_taken_score || 0.0;
+
+            // Animate SVG radial progress ring and score
+            animateRadialScore(overall);
+
+            // Animate score bar fills
+            document.getElementById('compVal').textContent = comp.toFixed(1);
+            document.getElementById('qualVal').textContent = qual.toFixed(1);
+            document.getElementById('apprVal').textContent = appr.toFixed(1);
+
+            document.getElementById('compFill').style.width = (comp * 10) + '%';
+            document.getElementById('qualFill').style.width = (qual * 10) + '%';
+            document.getElementById('apprFill').style.width = (appr * 10) + '%';
+
+            document.getElementById('feedbackText').textContent = item.correctness_feedback || "None";
+            document.getElementById('errorsText').textContent = item.common_errors || "None";
+            document.getElementById('strengthsText').textContent = item.strengths || "None";
+            document.getElementById('weaknessesText').textContent = item.weaknesses || "None";
+            document.getElementById('recsText').textContent = item.recommendations || "None";
+
+            referenceCode = item.corrected_code || "// Reference solution";
+            document.getElementById('correctedCodeText').textContent = referenceCode;
+
+        } catch (err) {
+            document.getElementById('loader').style.display = 'none';
+            alert('Error evaluating submission: ' + err);
+        }
+    });
+
+    function copyCode() {
+        if (!referenceCode) return;
+        navigator.clipboard.writeText(referenceCode);
+        const btn = document.getElementById('copyBtn');
+        btn.textContent = 'Copied!';
+        setTimeout(() => { btn.textContent = 'Copy'; }, 2000);
+    }
+</script>
+
+</body>
+</html>
