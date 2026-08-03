@@ -132,7 +132,6 @@ async def evaluate_single_submission(
         )
 
 
-@app.post("/review", response_model=PromptDrivenCodeReviewResponse)
 @app.post("/api/v1/review", response_model=PromptDrivenCodeReviewResponse)
 async def review_code(request: CodeReviewRequest):
     """Main POST endpoint to review code submissions using the LLM evaluation pipeline."""
