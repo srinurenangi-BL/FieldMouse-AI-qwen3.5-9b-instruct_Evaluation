@@ -23,10 +23,13 @@ class CodeSubmission(BaseModel):
     )
 
 
+from config import DEFAULT_TARGET_LANGUAGE
+
+
 class CodeReviewRequest(BaseModel):
     language: str = Field(
-        "Java",
-        description="Programming language of the submitted code (e.g., Java, Python, C++, JavaScript)",
+        default_factory=lambda: DEFAULT_TARGET_LANGUAGE,
+        description="Programming language of the submitted code (configured via .env or API request payload)",
         example="Java"
     )
     submissions: List[CodeSubmission] = Field(

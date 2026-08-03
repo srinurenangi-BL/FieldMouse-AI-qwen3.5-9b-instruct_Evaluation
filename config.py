@@ -13,7 +13,6 @@ OLLAMA_BASE_URL: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").rs
 OLLAMA_MODEL: str = os.getenv("OLLAMA_MODEL", "qwen2.5-coder:7b-instruct")
 LLM_MODEL: str = OLLAMA_MODEL
 
-
 LLM_ENDPOINT_URL: str = os.getenv(
     "LLM_ENDPOINT_URL",
     f"{OLLAMA_BASE_URL}/api/chat"
@@ -21,3 +20,4 @@ LLM_ENDPOINT_URL: str = os.getenv(
 
 LLM_TIMEOUT_SECONDS: float = float(os.getenv("LLM_TIMEOUT_SECONDS", "300.0"))
 LLM_TEMPERATURE: float = float(os.getenv("LLM_TEMPERATURE", "0.1"))
+DEFAULT_TARGET_LANGUAGE: str = os.getenv("DEFAULT_TARGET_LANGUAGE", "Java")

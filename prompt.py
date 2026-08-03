@@ -9,10 +9,9 @@ def build_master_prompt(
     question: str,
     student_code: str
 ) -> str:
-    """Version 1: Single-shot Master Prompt"""
     return f"""You are a strict code evaluator. You will be given a PROBLEM STATEMENT and a STUDENT CODE SUBMISSION in {language}. Evaluate the code carefully against the checklist below. Do not give marks or scores — only give findings.
 
-IMPORTANT: Base every single finding purely on your own reading and reasoning about the exact code shown below. Do not use any fixed rule list, external tool, or memorized "typical" answer for this kind of problem. Do not assume anything about the code that is not actually visible in it. If you are unsure whether something is an issue, say so explicitly rather than guessing.
+IMPORTANT: Base every single finding purely on your own reading and reasoning about the exact code shown below. Do not use any fixed rule list, external tool, or memorized answer for this kind of problem. Do not assume anything about the code that is not actually visible in it. If you are unsure whether something is an issue, say so explicitly rather than guessing.
 
 EXPECTED_LANGUAGE: {language}
 
@@ -50,7 +49,7 @@ OVERALL SUMMARY:
 Do not skip any category. Do not add extra commentary outside this format. Do not assign a numeric score or grade."""
 
 
-# ── VERSION 2: SPLIT PIPELINE PROMPT BUILDERS ────────────────────────────
+# ── SPLIT PIPELINE PROMPT BUILDERS ─────────────────────────────────────────
 
 def build_stage1_syntax_correctness_prompt(
     language: str,
@@ -71,7 +70,7 @@ Answer in this exact format:
 
 SYNTAX:
 - Status: OK / MINOR ISSUE / MAJOR ISSUE
-- Findings: (list any syntax errors, missing semicolons, unclosed braces, wrong language usage, deprecated constructs, with line references if possible)
+- Findings: Perform a strict Language Match Audit. First, check structural signatures, imports, headers, and syntax in STUDENT CODE against EXPECTED_LANGUAGE: {language}. If STUDENT CODE is written in a different programming language than EXPECTED_LANGUAGE: {language}, mark Status as MAJOR ISSUE and explicitly state: 'LANGUAGE MISMATCH: Submitted code is written in another programming language, not {language}.' List any syntax errors or missing constructs with line references.
 
 CORRECTNESS:
 - Status: OK / MINOR ISSUE / MAJOR ISSUE
@@ -194,7 +193,7 @@ Answer in this exact format:
 
 CONSTRAINT ADHERENCE:
 - Status: OK / MINOR ISSUE / MAJOR ISSUE / NOT APPLICABLE
-- Explicit Mandated Method Check: Check if the PROBLEM STATEMENT explicitly requires using specific classes, methods, or techniques (e.g. 'must use String.concat or StringBuilder', 'without using + operator', 'must use recursion'). If the student used a custom approach (like a char array loop) instead of the mandated method (like StringBuilder or String.concat), mark Status as MAJOR ISSUE and explicitly state: 'Mandated method ignored: problem specified using [mandated method], but student used custom [approach] instead.'
+- Explicit Mandated Method Check: Check if the PROBLEM STATEMENT explicitly requires using specific classes, methods, or techniques. If the student used a different approach instead of the mandated method, mark Status as MAJOR ISSUE and explicitly state what mandated method was ignored.
 - Did the code follow all explicit constraints stated in the problem statement?
 
 TESTING:
@@ -242,15 +241,20 @@ STAGE 5 OUTPUT (Constraints & Testing):
 {stage5_out}
 
 SCORING & SYNTHESIS RULES:
-1. Gatekeeper checks:
+1. Gatekeeper checks & Language Mismatch Rule:
    - If STUDENT CODE is empty or placeholder ("N/A", "TODO"): completeness_score=0.0, code_quality_score=0.0, approach_taken_score=0.0, overall_score=0.0.
-   - If Stage 1 reports language mismatch or problem statement mismatch: set all scores to 0.0.
+   - If Stage 1 reports LANGUAGE MISMATCH (student code is written in a different programming language than EXPECTED_LANGUAGE):
+     * MUST set ALL scores (completeness_score, code_quality_score, approach_taken_score, overall_score) to 0.0.
+     * MUST set correctness_feedback to: "Language Mismatch Error. The submitted code is written in a different programming language than expected."
+     * MUST set common_errors to: "Language Mismatch: Submitted code does not match EXPECTED_LANGUAGE."
+     * MUST set weaknesses to: "Submitted code is written in an incorrect programming language."
+     * MUST provide a 100% correct reference solution in EXPECTED_LANGUAGE under corrected_code.
 2. Mandated Method & Constraint Compliance Rule:
-   - Check Stage 5 output carefully: If Stage 5 notes that the student ignored an explicitly mandated class/method (e.g. problem requested String.concat or StringBuilder, but student used a custom char array loop instead):
-     * MUST set approach_taken_score to 4.0 - 5.0 (DO NOT award 8.0-10.0!).
-     * MUST include under common_errors: "Mandated approach ignored: The problem statement required using String.concat or StringBuilder append chain, but custom char array indexing was used instead."
-     * MUST include under weaknesses: "Failed to use the mandated String.concat or StringBuilder method specified in the problem statement."
-     * MUST include under recommendations: "Refactor the code to use String.concat() or StringBuilder.append() as explicitly requested by the problem statement."
+   - Check Stage 5 output carefully: If Stage 5 notes that the student ignored an explicitly mandated class/method:
+     * MUST set approach_taken_score to 4.0 - 5.0.
+     * MUST include under common_errors the specific mandated approach that was ignored.
+     * MUST include under weaknesses the failed mandate.
+     * MUST include under recommendations actionable advice to refactor using the mandated method.
 3. Score derivation:
    - completeness_score: 9.0–10.0 if correct and solves problem; 5.0–6.5 if syntax/compilation errors or incorrect logic.
    - approach_taken_score: 9.0–10.0 if all problem constraints followed; 4.0–5.0 if mandated method ignored or forbidden operator used.
@@ -259,10 +263,10 @@ SCORING & SYNTHESIS RULES:
 4. Synthesize fields:
    - correctness_feedback: EXACTLY 2 sentences detailing functional accuracy, syntax validity, and requirement compliance based strictly on Stage 1 findings.
    - common_errors: List specific syntax errors, missing semicolons, or constraint violations from Stage 1 and Stage 5 findings. Write "None" if clean.
-   - strengths: Bulleted top 3 strengths derived strictly from Stage 1–5 findings. (DO NOT list ignoring a mandated method as a strength!).
+   - strengths: Bulleted top 3 strengths derived strictly from Stage 1–5 findings.
    - weaknesses: Bulleted top 3 problems that must be fixed derived strictly from Stage 1–5 findings. Write "None" if optimal.
    - recommendations: Actionable step-by-step recommendations for fixing errors and improving code.
-   - corrected_code: A complete, valid reference solution in {language} satisfying ALL question requirements (including mandated methods like StringBuilder or String.concat) and best practices.
+   - corrected_code: A complete, valid reference solution in {language} satisfying ALL question requirements and best practices.
 
 OUTPUT FORMAT — Return ONLY this JSON object:
 {{
@@ -280,7 +284,7 @@ OUTPUT FORMAT — Return ONLY this JSON object:
         "approach_taken_score": 0.0,
         "overall_score": 0.0
       }},
-      "corrected_code": "<Complete valid reference solution in {language} adhering to mandated methods>"
+      "corrected_code": "<Complete valid reference solution in {language}>"
     }}
   ]
 }}"""

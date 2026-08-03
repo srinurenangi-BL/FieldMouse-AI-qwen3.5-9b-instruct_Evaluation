@@ -1,58 +1,79 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Code Reviewer — Apple Glassy Studio</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <title>AI Code Reviewer</title>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
+        rel="stylesheet">
     <style>
-        /* ── Apple Muted CSS Variable System ── */
+        :root {
+            --apple-spring: cubic-bezier(0.16, 1, 0.3, 1);
+            --apple-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        /* ── Apple macOS Sequoia Glassy Design Tokens ── */
         [data-theme="dark"] {
-            --bg-canvas: #090B10;
-            --glass-bg: rgba(18, 24, 38, 0.55);
-            --glass-card: rgba(12, 16, 26, 0.65);
-            --glass-border: rgba(255, 255, 255, 0.08);
-            --glass-border-hover: rgba(255, 255, 255, 0.18);
+            --bg-canvas: #0B0E14;
+            --glass-bg: rgba(22, 28, 44, 0.62);
+            --glass-card: rgba(16, 22, 36, 0.75);
+            --glass-border: rgba(255, 255, 255, 0.12);
+            --glass-border-hover: rgba(10, 132, 255, 0.5);
             --accent-blue: #0A84FF;
-            --accent-blue-soft: rgba(10, 132, 255, 0.12);
+            --accent-blue-soft: rgba(10, 132, 255, 0.15);
+            --accent-purple: #BF5AF2;
+            --accent-cyan: #64D2FF;
             --accent-green: #30D158;
             --accent-amber: #FF9500;
             --accent-red: #FF453A;
             --text-main: #F5F5F7;
-            --text-sub: #8E8E93;
-            --input-bg: rgba(9, 12, 19, 0.85);
-            --code-bg: rgba(7, 9, 14, 0.95);
-            --code-text: #93C5FD;
-            --orb-opacity: 0.06;
+            --text-sub: #98989D;
+            --input-bg: rgba(10, 13, 22, 0.85);
+            --code-bg: #07090F;
+            --code-text: #A5F3FC;
+            --orb-opacity: 0.14;
+            --glow-shadow: rgba(10, 132, 255, 0.3);
+            --modal-bg: rgba(15, 20, 32, 0.88);
         }
 
         [data-theme="light"] {
-            --bg-canvas: #F5F5F7;
-            --glass-bg: rgba(255, 255, 255, 0.75);
-            --glass-card: rgba(255, 255, 255, 0.85);
+            --bg-canvas: #F2F2F7;
+            --glass-bg: rgba(255, 255, 255, 0.78);
+            --glass-card: rgba(255, 255, 255, 0.92);
             --glass-border: rgba(0, 0, 0, 0.08);
-            --glass-border-hover: rgba(0, 0, 0, 0.16);
+            --glass-border-hover: rgba(0, 113, 227, 0.4);
             --accent-blue: #0071E3;
-            --accent-blue-soft: rgba(0, 113, 227, 0.08);
+            --accent-blue-soft: rgba(0, 113, 227, 0.1);
+            --accent-purple: #AF52DE;
+            --accent-cyan: #00A3EE;
             --accent-green: #34C759;
             --accent-amber: #FF9500;
             --accent-red: #FF3B30;
             --text-main: #1D1D1F;
-            --text-sub: #86868B;
-            --input-bg: rgba(255, 255, 255, 0.9);
-            --code-bg: #1D1D1F;
+            --text-sub: #6E6E73;
+            --input-bg: rgba(255, 255, 255, 0.95);
+            --code-bg: #1E1F24;
             --code-text: #E0F2FE;
-            --orb-opacity: 0.04;
+            --orb-opacity: 0.08;
+            --glow-shadow: rgba(0, 113, 227, 0.2);
+            --modal-bg: rgba(255, 255, 255, 0.94);
         }
 
-        * { box-sizing: border-box; margin: 0; padding: 0; transition: background 0.3s ease, border-color 0.3s ease, color 0.3s ease, box-shadow 0.3s ease; }
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            transition: background 0.4s var(--apple-spring), border-color 0.4s var(--apple-spring), color 0.4s var(--apple-spring), box-shadow 0.4s var(--apple-spring), transform 0.4s var(--apple-spring);
+        }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Inter", sans-serif;
             background-color: var(--bg-canvas);
             color: var(--text-main);
             min-height: 100vh;
-            padding: 30px 20px;
+            padding: 40px 20px;
             display: flex;
             justify-content: center;
             align-items: flex-start;
@@ -61,7 +82,7 @@
             position: relative;
         }
 
-        /* ── Ambient Floating Mesh Lighting ── */
+        /* ── Apple Ambient Light Mesh Orbs ── */
         .ambient-mesh {
             position: fixed;
             top: 0;
@@ -76,226 +97,317 @@
         .orb {
             position: absolute;
             border-radius: 50%;
-            filter: blur(90px);
+            filter: blur(100px);
             opacity: var(--orb-opacity);
             animation: floatOrb 22s ease-in-out infinite alternate;
         }
 
         .orb-1 {
-            width: 550px;
-            height: 550px;
-            background: radial-gradient(circle, var(--accent-blue) 0%, transparent 70%);
-            top: -150px;
-            left: 15%;
+            width: 650px;
+            height: 650px;
+            background: radial-gradient(circle, var(--accent-blue) 0%, var(--accent-purple) 60%, transparent 100%);
+            top: -200px;
+            left: 10%;
         }
 
         .orb-2 {
-            width: 480px;
-            height: 480px;
-            background: radial-gradient(circle, #6366F1 0%, transparent 70%);
-            bottom: -120px;
-            right: 15%;
-            animation-duration: 28s;
+            width: 550px;
+            height: 550px;
+            background: radial-gradient(circle, var(--accent-cyan) 0%, var(--accent-blue) 60%, transparent 100%);
+            bottom: -180px;
+            right: 10%;
+            animation-duration: 26s;
             animation-direction: alternate-reverse;
         }
 
         @keyframes floatOrb {
-            0% { transform: translateY(0) scale(1) rotate(0deg); }
-            50% { transform: translateY(40px) scale(1.06) rotate(6deg); }
-            100% { transform: translateY(-25px) scale(0.96) rotate(-6deg); }
+            0% {
+                transform: translate(0, 0) scale(1);
+            }
+
+            50% {
+                transform: translate(50px, 35px) scale(1.08);
+            }
+
+            100% {
+                transform: translate(-30px, 40px) scale(0.95);
+            }
         }
 
         .container {
-            max-width: 1140px;
+            max-width: 1180px;
             width: 100%;
             position: relative;
             z-index: 1;
-            animation: pageFade 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            animation: pageAppleEntrance 1s var(--apple-spring) forwards;
         }
 
-        @keyframes pageFade {
-            0% { opacity: 0; transform: translateY(16px); }
-            100% { opacity: 1; transform: translateY(0); }
+        @keyframes pageAppleEntrance {
+            0% {
+                opacity: 0;
+                transform: translateY(28px) scale(0.96);
+            }
+
+            100% {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
         }
 
-        /* ── Header Bar & Day/Night Toggle Switch ── */
+        /* ── Apple Studio Header Bar ── */
         header {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            margin-bottom: 32px;
-            padding-bottom: 16px;
+            margin-bottom: 36px;
+            padding-bottom: 20px;
             border-bottom: 1px solid var(--glass-border);
         }
 
         .header-brand h1 {
-            font-size: 28px;
-            font-weight: 700;
-            letter-spacing: -0.5px;
+            font-size: 30px;
+            font-weight: 800;
+            letter-spacing: -0.8px;
             color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 14px;
         }
 
-        .header-brand p.subtitle {
-            color: var(--text-sub);
-            font-size: 14px;
-            font-weight: 400;
-            margin-top: 2px;
+        .header-brand h1::before {
+            content: '</>';
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 18px;
+            font-weight: 800;
+            color: #FFFFFF;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+            padding: 6px 14px;
+            border-radius: 12px;
+            box-shadow: 0 4px 16px var(--glow-shadow);
+            animation: appleLogoPulse 3s ease-in-out infinite;
         }
 
-        /* Apple Glassy Theme Switcher Toggle */
+        @keyframes appleLogoPulse {
+
+            0%,
+            100% {
+                transform: scale(1);
+                filter: drop-shadow(0 2px 8px var(--glow-shadow));
+            }
+
+            50% {
+                transform: scale(1.12);
+                filter: drop-shadow(0 4px 16px var(--accent-cyan));
+            }
+        }
+
         .theme-toggle-btn {
             background: var(--glass-bg);
-            backdrop-filter: blur(16px);
+            backdrop-filter: blur(24px) saturate(200%);
+            -webkit-backdrop-filter: blur(24px) saturate(200%);
             border: 1px solid var(--glass-border);
             color: var(--text-main);
-            padding: 8px 16px;
+            padding: 10px 22px;
             border-radius: 9999px;
             font-size: 13px;
-            font-weight: 600;
+            font-weight: 700;
             cursor: pointer;
             display: flex;
             align-items: center;
             gap: 8px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
         }
 
         .theme-toggle-btn:hover {
             border-color: var(--glass-border-hover);
-            transform: translateY(-1px);
+            transform: translateY(-2px) scale(1.04);
+            box-shadow: 0 12px 30px var(--glow-shadow);
         }
 
+        .theme-toggle-btn:active {
+            transform: translateY(0) scale(0.96);
+        }
+
+        /* ── Grid Layout ── */
         .layout-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 24px;
+            gap: 28px;
         }
 
-        @media (max-width: 900px) {
-            .layout-grid { grid-template-columns: 1fr; }
-            header { flex-direction: column; align-items: flex-start; gap: 16px; }
+        @media (max-width: 960px) {
+            .layout-grid {
+                grid-template-columns: 1fr;
+            }
+
+            header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 20px;
+            }
         }
 
-        /* ── Minimalist Glass Panel ── */
+        /* ── Apple Glass Panel Cards ── */
         .glass-panel {
             background: var(--glass-bg);
-            backdrop-filter: blur(25px) saturate(180%);
-            -webkit-backdrop-filter: blur(25px) saturate(180%);
+            backdrop-filter: blur(35px) saturate(210%);
+            -webkit-backdrop-filter: blur(35px) saturate(210%);
             border: 1px solid var(--glass-border);
-            border-radius: 18px;
-            padding: 24px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+            border-radius: 24px;
+            padding: 28px;
+            box-shadow: 0 20px 45px rgba(0, 0, 0, 0.12);
+            position: relative;
+            overflow: hidden;
         }
 
         .glass-panel:hover {
             border-color: var(--glass-border-hover);
+            box-shadow: 0 28px 56px rgba(0, 0, 0, 0.18), 0 0 25px var(--glow-shadow);
         }
 
         .panel-title {
-            font-size: 14.5px;
-            font-weight: 600;
-            letter-spacing: -0.2px;
+            font-size: 15px;
+            font-weight: 700;
+            letter-spacing: -0.3px;
             color: var(--text-main);
-            margin-bottom: 18px;
+            margin-bottom: 22px;
             display: flex;
             align-items: center;
-            justify-content: space-between;
+            gap: 10px;
         }
 
         .form-group {
-            margin-bottom: 16px;
+            margin-bottom: 20px;
         }
 
         label {
             display: block;
-            font-size: 11.5px;
-            font-weight: 600;
+            font-size: 12px;
+            font-weight: 700;
             color: var(--text-sub);
-            margin-bottom: 8px;
+            margin-bottom: 10px;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
+            letter-spacing: 0.8px;
         }
 
         textarea {
             width: 100%;
             background: var(--input-bg);
             border: 1px solid var(--glass-border);
-            border-radius: 12px;
+            border-radius: 16px;
             color: var(--text-main);
-            padding: 14px;
-            font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
-            font-size: 13.5px;
-            line-height: 1.5;
+            padding: 16px;
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", sans-serif;
+            font-size: 14px;
+            line-height: 1.6;
             outline: none;
             resize: vertical;
         }
 
+        .language-select {
+            width: 100%;
+            background: var(--input-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 14px;
+            color: var(--text-main);
+            padding: 12px 16px;
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", sans-serif;
+            font-size: 14px;
+            font-weight: 600;
+            outline: none;
+            cursor: pointer;
+        }
+
+        .language-select option {
+            background: var(--bg-canvas);
+            color: var(--text-main);
+        }
+
         textarea:focus {
             border-color: var(--accent-blue);
-            box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.18);
+            box-shadow: 0 0 0 4px var(--accent-blue-soft), 0 0 20px var(--glow-shadow);
+            transform: translateY(-1px);
         }
 
         textarea.code-area {
             font-family: 'JetBrains Mono', monospace;
-            font-size: 13px;
-            min-height: 260px;
+            font-size: 13.5px;
+            min-height: 280px;
             white-space: pre;
         }
 
-        /* Submit Button */
+        /* Apple Intelligence Shimmer Submit Button */
         .btn-submit {
             width: 100%;
-            background: var(--accent-blue);
+            background: linear-gradient(135deg, var(--accent-blue), #0051A8);
             color: #FFFFFF;
             border: none;
-            padding: 14px;
-            font-size: 14px;
-            font-weight: 600;
-            border-radius: 12px;
+            padding: 16px;
+            font-size: 15px;
+            font-weight: 700;
+            border-radius: 16px;
             cursor: pointer;
-            box-shadow: 0 4px 16px rgba(10, 132, 255, 0.25);
+            box-shadow: 0 8px 24px rgba(10, 132, 255, 0.35);
             position: relative;
             overflow: hidden;
         }
 
+        .btn-submit::after {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: linear-gradient(60deg, transparent, rgba(255, 255, 255, 0.25), transparent);
+            transform: rotate(30deg) translateX(-100%);
+            transition: transform 0.8s ease;
+        }
+
+        .btn-submit:hover::after {
+            transform: rotate(30deg) translateX(100%);
+        }
+
         .btn-submit:hover {
-            opacity: 0.94;
-            box-shadow: 0 6px 22px rgba(10, 132, 255, 0.35);
+            transform: translateY(-3px) scale(1.01);
+            box-shadow: 0 14px 36px rgba(10, 132, 255, 0.5), 0 0 24px var(--accent-cyan);
         }
 
         .btn-submit:active {
-            transform: scale(0.985);
+            transform: translateY(0) scale(0.97);
         }
 
-        /* ── Stunning SVG Radial Score Meters ── */
+        /* ── Apple Score Hero & Activity Ring ── */
         .score-hero-container {
             display: flex;
             align-items: center;
             justify-content: space-around;
             background: var(--glass-card);
             border: 1px solid var(--glass-border);
-            border-radius: 16px;
-            padding: 20px;
-            margin-bottom: 22px;
+            border-radius: 20px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.1);
         }
 
         .radial-meter {
             position: relative;
-            width: 100px;
-            height: 100px;
+            width: 110px;
+            height: 110px;
             display: flex;
             align-items: center;
             justify-content: center;
         }
 
         .radial-meter svg {
-            width: 100px;
-            height: 100px;
+            width: 110px;
+            height: 110px;
             transform: rotate(-90deg);
         }
 
         .radial-meter circle {
             fill: none;
-            stroke-width: 8;
+            stroke-width: 9;
             stroke-linecap: round;
         }
 
@@ -304,10 +416,10 @@
         }
 
         .circle-progress {
-            stroke: var(--accent-blue);
+            stroke: url(#scoreGradient);
             stroke-dasharray: 264;
             stroke-dashoffset: 264;
-            transition: stroke-dashoffset 1.2s cubic-bezier(0.16, 1, 0.3, 1);
+            transition: stroke-dashoffset 1.4s var(--apple-spring);
         }
 
         .radial-center {
@@ -316,413 +428,845 @@
         }
 
         .radial-val {
-            font-size: 24px;
+            font-size: 28px;
             font-weight: 800;
             color: var(--accent-blue);
             line-height: 1;
+            letter-spacing: -0.5px;
         }
 
         .radial-lbl {
             font-size: 10px;
             color: var(--text-sub);
             text-transform: uppercase;
-            letter-spacing: 0.5px;
+            letter-spacing: 0.8px;
             margin-top: 4px;
+            font-weight: 700;
         }
 
         .score-pills {
             display: flex;
             flex-direction: column;
-            gap: 10px;
+            gap: 12px;
             flex-grow: 1;
-            max-width: 260px;
+            max-width: 270px;
         }
 
         .pill-item {
             display: flex;
             flex-direction: column;
-            gap: 4px;
+            gap: 6px;
         }
 
         .pill-info {
             display: flex;
             justify-content: space-between;
             font-size: 12px;
-            font-weight: 600;
+            font-weight: 700;
         }
 
         .pill-track {
             background: var(--glass-border);
-            height: 7px;
-            border-radius: 4px;
+            height: 8px;
+            border-radius: 6px;
             overflow: hidden;
         }
 
         .pill-fill {
             height: 100%;
-            border-radius: 4px;
+            border-radius: 6px;
             width: 0%;
-            background: var(--accent-blue);
-            transition: width 1.2s cubic-bezier(0.16, 1, 0.3, 1);
+            background: linear-gradient(90deg, var(--accent-blue), var(--accent-cyan));
+            transition: width 1.4s var(--apple-spring);
         }
 
-        /* ── Report Elements ── */
+        /* ── Apple Quality Badge ── */
+        .quality-badge-pill {
+            font-size: 12px;
+            font-weight: 800;
+            padding: 8px 18px;
+            border-radius: 9999px;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            animation: appleBadgePop 0.6s var(--apple-bounce) forwards;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+        }
+
+        @keyframes appleBadgePop {
+            0% {
+                opacity: 0;
+                transform: scale(0.6);
+            }
+
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        /* ── SEGREGATED INTERACTIVE BLOCKS & POPUP CARDS ── */
         .empty-placeholder {
             text-align: center;
-            padding: 90px 20px;
+            padding: 100px 20px;
             color: var(--text-sub);
-            font-size: 14px;
+            font-size: 14.5px;
+            font-weight: 500;
         }
 
-        .feedback-box {
-            background: var(--accent-blue-soft);
-            border: 1px solid rgba(10, 132, 255, 0.2);
-            border-radius: 12px;
-            padding: 14px 16px;
-            margin-bottom: 18px;
-            font-size: 13.5px;
+        .blocks-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        @media (max-width: 600px) {
+            .blocks-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .response-card-block {
+            background: var(--glass-card);
+            border: 1px solid var(--glass-border);
+            border-radius: 18px;
+            padding: 18px 20px;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            min-height: 120px;
+            opacity: 0;
+            transform: translateY(24px) scale(0.97);
+            animation: appleCascade 0.7s var(--apple-spring) forwards;
+        }
+
+        .response-card-block:nth-child(1) {
+            animation-delay: 0.1s;
+        }
+
+        .response-card-block:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .response-card-block:nth-child(3) {
+            animation-delay: 0.3s;
+        }
+
+        .response-card-block:nth-child(4) {
+            animation-delay: 0.4s;
+        }
+
+        .response-card-block:nth-child(5) {
+            animation-delay: 0.5s;
+        }
+
+        .response-card-block:nth-child(6) {
+            animation-delay: 0.6s;
+            grid-column: span 2;
+        }
+
+        @media (max-width: 600px) {
+            .response-card-block:nth-child(6) {
+                grid-column: span 1;
+            }
+        }
+
+        .response-card-block:hover {
+            transform: translateY(-4px) scale(1.02);
+            border-color: var(--glass-border-hover);
+            box-shadow: 0 16px 36px rgba(0, 0, 0, 0.2), 0 0 20px var(--glow-shadow);
+        }
+
+        .response-card-block:active {
+            transform: scale(0.97);
+        }
+
+        .block-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+
+        .block-tag {
+            font-size: 12px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .block-tag.feedback {
+            color: var(--accent-blue);
+        }
+
+        .block-tag.err {
+            color: var(--accent-red);
+        }
+
+        .block-tag.str {
+            color: var(--accent-green);
+        }
+
+        .block-tag.weak {
+            color: var(--accent-amber);
+        }
+
+        .block-tag.rec {
+            color: var(--accent-purple);
+        }
+
+        .block-tag.code {
+            color: var(--accent-cyan);
+        }
+
+        .block-expand-icon {
+            font-size: 14px;
+            color: var(--text-sub);
+            transition: transform 0.3s var(--apple-spring);
+        }
+
+        .response-card-block:hover .block-expand-icon {
+            transform: translate(2px, -2px) scale(1.2);
+            color: var(--accent-blue);
+        }
+
+        .block-preview-text {
+            font-size: 13px;
             line-height: 1.5;
+            color: var(--text-main);
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            opacity: 0.9;
+        }
+
+        .click-hint {
+            font-size: 10px;
+            font-weight: 700;
+            color: var(--text-sub);
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            margin-top: 10px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        @keyframes appleCascade {
+            0% {
+                opacity: 0;
+                transform: translateY(24px) scale(0.97);
+            }
+
+            100% {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        /* ── APPLE VISION PRO GLASS POPUP MODAL ── */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.65);
+            backdrop-filter: blur(28px) saturate(200%);
+            -webkit-backdrop-filter: blur(28px) saturate(200%);
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.4s var(--apple-spring);
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal-card {
+            background: var(--modal-bg);
+            border: 1px solid var(--glass-border-hover);
+            border-radius: 28px;
+            max-width: 680px;
+            width: 100%;
+            max-height: 82vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45), 0 0 40px var(--glow-shadow);
+            transform: scale(0.88) translateY(20px);
+            transition: transform 0.4s var(--apple-bounce);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .modal-overlay.active .modal-card {
+            transform: scale(1) translateY(0);
+        }
+
+        .modal-header {
+            padding: 24px 28px 18px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        .modal-title-tag {
+            font-size: 14px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .btn-close-modal {
+            background: var(--glass-border);
+            border: none;
+            color: var(--text-main);
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            font-size: 18px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn-close-modal:hover {
+            background: var(--accent-red);
+            color: #FFFFFF;
+            transform: scale(1.1);
+        }
+
+        .modal-body {
+            padding: 24px 28px;
+            overflow-y: auto;
+            font-size: 14.5px;
+            line-height: 1.7;
             color: var(--text-main);
         }
 
-        .diag-section {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            margin-bottom: 18px;
-        }
-
-        .diag-item {
-            background: var(--glass-card);
-            border: 1px solid var(--glass-border);
-            border-radius: 10px;
-            padding: 12px 14px;
-            font-size: 13px;
-        }
-
-        .diag-tag {
-            font-size: 11px;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-bottom: 4px;
-        }
-
-        .diag-tag.err { color: var(--accent-red); }
-        .diag-tag.str { color: var(--accent-green); }
-        .diag-tag.weak { color: var(--accent-amber); }
-        .diag-tag.rec { color: var(--accent-blue); }
-
-        pre.code-block {
+        pre.modal-code-block {
             background: var(--code-bg);
             border: 1px solid var(--glass-border);
-            border-radius: 12px;
-            padding: 14px;
+            border-radius: 18px;
+            padding: 20px;
             font-family: 'JetBrains Mono', monospace;
-            font-size: 12.5px;
+            font-size: 13.5px;
             color: var(--code-text);
             overflow-x: auto;
             white-space: pre-wrap;
-            position: relative;
+            box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.4);
         }
 
-        .btn-copy-mini {
-            position: absolute;
-            top: 8px;
-            right: 8px;
-            background: rgba(255, 255, 255, 0.15);
-            border: none;
+        .modal-footer {
+            padding: 16px 28px 24px;
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+            border-top: 1px solid var(--glass-border);
+        }
+
+        .btn-modal-copy {
+            background: var(--accent-blue);
             color: #FFFFFF;
-            padding: 4px 10px;
-            border-radius: 6px;
-            font-size: 11px;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 12px;
+            font-size: 13px;
+            font-weight: 700;
             cursor: pointer;
+            box-shadow: 0 4px 16px var(--glow-shadow);
         }
 
-        .btn-copy-mini:hover {
-            background: rgba(255, 255, 255, 0.25);
+        .btn-modal-copy:hover {
+            transform: scale(1.05);
         }
 
-        /* Minimal Dual Ring Loader */
+        /* ── Apple Intelligence Glow Loader ── */
         .loader-wrap {
             display: none;
             text-align: center;
-            padding: 85px 20px;
+            padding: 90px 20px;
         }
 
-        .dual-ring {
-            width: 44px;
-            height: 44px;
-            border: 3px solid rgba(10, 132, 255, 0.15);
-            border-top: 3px solid var(--accent-blue);
+        .apple-spinner {
+            position: relative;
+            width: 76px;
+            height: 76px;
+            margin: 0 auto 22px;
+        }
+
+        .apple-ring-1,
+        .apple-ring-2 {
+            position: absolute;
+            inset: 0;
             border-radius: 50%;
-            animation: spin 0.85s cubic-bezier(0.5, 0, 0.5, 1) infinite;
-            margin: 0 auto 16px;
+            border: 4px solid transparent;
         }
 
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        @keyframes fadeIn { 0% { opacity: 0; transform: translateY(8px); } 100% { opacity: 1; transform: translateY(0); } }
+        .apple-ring-1 {
+            border-top-color: var(--accent-blue);
+            border-bottom-color: var(--accent-cyan);
+            animation: appleSpin 1.2s var(--apple-spring) infinite;
+        }
 
-        .report-stagger {
-            animation: fadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        .apple-ring-2 {
+            inset: 10px;
+            border-left-color: var(--accent-purple);
+            border-right-color: var(--accent-green);
+            animation: appleSpin 1.8s linear infinite reverse;
+        }
+
+        @keyframes appleSpin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .loader-pulse-text {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-sub);
+            animation: applePulseText 1.6s ease-in-out infinite alternate;
+        }
+
+        @keyframes applePulseText {
+            0% {
+                opacity: 0.4;
+                transform: scale(0.98);
+            }
+
+            100% {
+                opacity: 1;
+                transform: scale(1.02);
+            }
         }
     </style>
 </head>
+
 <body>
 
-<div class="ambient-mesh">
-    <div class="orb orb-1"></div>
-    <div class="orb orb-2"></div>
-</div>
+    <!-- Apple Ambient Mesh Lighting -->
+    <div class="ambient-mesh">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+    </div>
 
-<div class="container">
-    <header>
-        <div class="header-brand">
-            <h1>Code Reviewer Pro</h1>
-            <p class="subtitle">Evidence-based code evaluation & constraint verification engine</p>
-        </div>
-
-        <button type="button" class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()">
-            <span id="themeIcon">☀️</span>
-            <span id="themeText">Light Mode</span>
-        </button>
-    </header>
-
-    <div class="layout-grid">
-        <!-- Input Form Panel -->
-        <div class="glass-panel">
-            <div class="panel-title">
-                <span>Submission</span>
+    <div class="container">
+        <header>
+            <div class="header-brand">
+                <h1>Code Reviewer</h1>
             </div>
 
-            <form id="reviewForm">
-                <div class="form-group">
-                    <label for="problem">Question Statement</label>
-                    <textarea id="problem" name="problem" placeholder="Enter problem statement and constraints..." required></textarea>
+            <button type="button" class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()">
+                <span id="themeIcon">☀️</span>
+                <span id="themeText">Light Mode</span>
+            </button>
+        </header>
+
+        <div class="layout-grid">
+            <!-- Input Form Panel -->
+            <div class="glass-panel">
+                <div class="panel-title">
+                    <span>⚡ Submission Sandbox</span>
                 </div>
 
-                <div class="form-group">
-                    <label for="code">Code Submission</label>
-                    <textarea id="code" name="code" class="code-area" placeholder="Paste source code here..." required></textarea>
+                <form id="reviewForm">
+                    <div class="form-group">
+                        <label for="problem">Question Statement & Constraints</label>
+                        <textarea id="problem" name="problem" placeholder="Enter problem statement and constraints..."
+                            required></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="code">Student Code Submission</label>
+                        <textarea id="code" name="code" class="code-area" placeholder="Paste source code here..."
+                            required></textarea>
+                    </div>
+
+                    <button type="submit" class="btn-submit">
+                        <span>Execute AI Audit & Evaluation</span>
+                    </button>
+                </form>
+            </div>
+
+            <!-- Evaluation Report Panel -->
+            <div class="glass-panel">
+                <div class="panel-title">
+                    <span>📊 Evaluation Intelligence</span>
                 </div>
 
-                <button type="submit" class="btn-submit">Evaluate Submission</button>
-            </form>
-        </div>
+                <div id="emptyState" class="empty-placeholder">
+                    <p>✨ Submit code on the left to trigger real-time AI execution analysis.</p>
+                </div>
 
-        <!-- Evaluation Report Panel -->
-        <div class="glass-panel">
-            <div class="panel-title">
-                <span>Evaluation Report</span>
-            </div>
+                <div id="loader" class="loader-wrap">
+                    <div class="apple-spinner">
+                        <div class="apple-ring-1"></div>
+                        <div class="apple-ring-2"></div>
+                    </div>
+                    <p class="loader-pulse-text">Auditing sentence-by-sentence constraints & line execution...</p>
+                </div>
 
-            <div id="emptyState" class="empty-placeholder">
-                <p>Submit code on the left to generate the evaluation report.</p>
-            </div>
+                <div id="reportContent" style="display: none;">
+                    <!-- Radial Score Meter Hero -->
+                    <div class="score-hero-container">
+                        <div class="radial-meter">
+                            <svg viewBox="0 0 100 100">
+                                <defs>
+                                    <linearGradient id="scoreGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                                        <stop offset="0%" stop-color="var(--accent-blue)" />
+                                        <stop offset="100%" stop-color="var(--accent-cyan)" />
+                                    </linearGradient>
+                                </defs>
+                                <circle class="circle-bg" cx="50" cy="50" r="42"></circle>
+                                <circle id="radialProgressCircle" class="circle-progress" cx="50" cy="50" r="42">
+                                </circle>
+                            </svg>
+                            <div class="radial-center">
+                                <div id="overallVal" class="radial-val">0.0</div>
+                                <div class="radial-lbl">Overall</div>
+                            </div>
+                        </div>
 
-            <div id="loader" class="loader-wrap">
-                <div class="dual-ring"></div>
-                <p style="font-size: 13.5px; font-weight: 500; color: var(--text-sub);">Auditing sentence-by-sentence constraints...</p>
-            </div>
+                        <div id="qualityBadge" class="quality-badge-pill" style="display:none;"></div>
 
-            <div id="reportContent" style="display: none;" class="report-stagger">
-                <!-- Radial Score Meter Hero -->
-                <div class="score-hero-container">
-                    <div class="radial-meter">
-                        <svg viewBox="0 0 100 100">
-                            <circle class="circle-bg" cx="50" cy="50" r="42"></circle>
-                            <circle id="radialProgressCircle" class="circle-progress" cx="50" cy="50" r="42"></circle>
-                        </svg>
-                        <div class="radial-center">
-                            <div id="overallVal" class="radial-val">0.0</div>
-                            <div class="radial-lbl">Overall</div>
+                        <div class="score-pills">
+                            <div class="pill-item">
+                                <div class="pill-info"><span>Completeness</span><span id="compVal">0.0</span></div>
+                                <div class="pill-track">
+                                    <div id="compFill" class="pill-fill"></div>
+                                </div>
+                            </div>
+                            <div class="pill-item">
+                                <div class="pill-info"><span>Code Quality</span><span id="qualVal">0.0</span></div>
+                                <div class="pill-track">
+                                    <div id="qualFill" class="pill-fill"></div>
+                                </div>
+                            </div>
+                            <div class="pill-item">
+                                <div class="pill-info"><span>Approach & Constraints</span><span id="apprVal">0.0</span>
+                                </div>
+                                <div class="pill-track">
+                                    <div id="apprFill" class="pill-fill"></div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
-                    <div class="score-pills">
-                        <div class="pill-item">
-                            <div class="pill-info"><span>Completeness</span><span id="compVal">0.0</span></div>
-                            <div class="pill-track"><div id="compFill" class="pill-fill"></div></div>
+                    <!-- Segregated Interactive Output Response Blocks -->
+                    <div class="blocks-grid">
+                        <!-- Block 1: Executive Feedback -->
+                        <div class="response-card-block" onclick="openModal('feedback')">
+                            <div class="block-header">
+                                <span class="block-tag feedback">💬 Executive Feedback</span>
+                                <span class="block-expand-icon">↗</span>
+                            </div>
+                            <div id="blockFeedbackText" class="block-preview-text">None</div>
+                            <div class="click-hint"><span>Click to inspect details</span></div>
                         </div>
-                        <div class="pill-item">
-                            <div class="pill-info"><span>Code Quality</span><span id="qualVal">0.0</span></div>
-                            <div class="pill-track"><div id="qualFill" class="pill-fill"></div></div>
+
+                        <!-- Block 2: Common Errors -->
+                        <div class="response-card-block" onclick="openModal('errors')">
+                            <div class="block-header">
+                                <span class="block-tag err">⚠️ Common Errors</span>
+                                <span class="block-expand-icon">↗</span>
+                            </div>
+                            <div id="blockErrorsText" class="block-preview-text">None</div>
+                            <div class="click-hint"><span>Click to inspect details</span></div>
                         </div>
-                        <div class="pill-item">
-                            <div class="pill-info"><span>Approach & Constraints</span><span id="apprVal">0.0</span></div>
-                            <div class="pill-track"><div id="apprFill" class="pill-fill"></div></div>
+
+                        <!-- Block 3: Key Strengths -->
+                        <div class="response-card-block" onclick="openModal('strengths')">
+                            <div class="block-header">
+                                <span class="block-tag str">💪 Key Strengths</span>
+                                <span class="block-expand-icon">↗</span>
+                            </div>
+                            <div id="blockStrengthsText" class="block-preview-text">None</div>
+                            <div class="click-hint"><span>Click to inspect details</span></div>
+                        </div>
+
+                        <!-- Block 4: Weaknesses -->
+                        <div class="response-card-block" onclick="openModal('weaknesses')">
+                            <div class="block-header">
+                                <span class="block-tag weak">📌 Weaknesses & Gaps</span>
+                                <span class="block-expand-icon">↗</span>
+                            </div>
+                            <div id="blockWeaknessesText" class="block-preview-text">None</div>
+                            <div class="click-hint"><span>Click to inspect details</span></div>
+                        </div>
+
+                        <!-- Block 5: Recommendations -->
+                        <div class="response-card-block" onclick="openModal('recs')">
+                            <div class="block-header">
+                                <span class="block-tag rec">💡 Recommendations</span>
+                                <span class="block-expand-icon">↗</span>
+                            </div>
+                            <div id="blockRecsText" class="block-preview-text">None</div>
+                            <div class="click-hint"><span>Click to inspect details</span></div>
+                        </div>
+
+                        <!-- Block 6: Reference Solution -->
+                        <div class="response-card-block" onclick="openModal('code')">
+                            <div class="block-header">
+                                <span class="block-tag code">💻 Reference Solution</span>
+                                <span class="block-expand-icon">↗</span>
+                            </div>
+                            <div id="blockCodeText" class="block-preview-text">// Reference code ready</div>
+                            <div class="click-hint"><span>Click to open code editor</span></div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Feedback -->
-                <label>Feedback</label>
-                <div id="feedbackText" class="feedback-box"></div>
-
-                <!-- Diagnostics -->
-                <div class="diag-section">
-                    <div class="diag-item">
-                        <div class="diag-tag err">Common Errors / Constraints</div>
-                        <div id="errorsText"></div>
-                    </div>
-                    <div class="diag-item">
-                        <div class="diag-tag str">Strengths</div>
-                        <div id="strengthsText"></div>
-                    </div>
-                    <div class="diag-item">
-                        <div class="diag-tag weak">Weaknesses</div>
-                        <div id="weaknessesText"></div>
-                    </div>
-                    <div class="diag-item">
-                        <div class="diag-tag rec">Recommendations</div>
-                        <div id="recsText"></div>
-                    </div>
-                </div>
-
-                <!-- Corrected Reference Code -->
-                <label>Reference Solution</label>
-                <div style="position: relative;">
-                    <button type="button" class="btn-copy-mini" id="copyBtn" onclick="copyCode()">Copy</button>
-                    <pre id="correctedCodeText" class="code-block"></pre>
-                </div>
             </div>
-
         </div>
     </div>
-</div>
 
-<script>
-    let referenceCode = '';
+    <!-- Apple Vision Pro Style Animated Popup Modal -->
+    <div id="modalOverlay" class="modal-overlay" onclick="closeModalOnOverlay(event)">
+        <div class="modal-card">
+            <div class="modal-header">
+                <div id="modalTitleTag" class="modal-title-tag">💬 Executive Feedback</div>
+                <button type="button" class="btn-close-modal" onclick="closeModal()">×</button>
+            </div>
+            <div id="modalBody" class="modal-body"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn-modal-copy" id="modalCopyBtn" onclick="copyModalContent()">Copy
+                    Details</button>
+            </div>
+        </div>
+    </div>
 
-    // ── Day / Night Theme Switcher Logic ──
-    function initTheme() {
-        const savedTheme = localStorage.getItem('lms_theme') || 'dark';
-        applyTheme(savedTheme);
-    }
+    <script>
+        let evaluationData = {};
 
-    function applyTheme(theme) {
-        document.documentElement.setAttribute('data-theme', theme);
-        localStorage.setItem('lms_theme', theme);
-        const icon = document.getElementById('themeIcon');
-        const text = document.getElementById('themeText');
-        if (theme === 'dark') {
-            icon.textContent = '☀️';
-            text.textContent = 'Light Mode';
-        } else {
-            icon.textContent = '🌙';
-            text.textContent = 'Dark Mode';
+        // ── Day / Night Theme Switcher Logic ──
+        function initTheme() {
+            const savedTheme = localStorage.getItem('lms_theme') || 'dark';
+            applyTheme(savedTheme);
         }
-    }
 
-    function toggleTheme() {
-        const current = document.documentElement.getAttribute('data-theme');
-        applyTheme(current === 'dark' ? 'light' : 'dark');
-    }
-
-    initTheme();
-
-    // ── Radial SVG Score Ring & Counter Animation ──
-    function animateRadialScore(targetVal) {
-        const circle = document.getElementById('radialProgressCircle');
-        const valEl = document.getElementById('overallVal');
-        
-        // Full perimeter for r=42 is ~263.89
-        const perimeter = 264;
-        const targetOffset = perimeter - (perimeter * (targetVal / 10.0));
-        
-        circle.style.strokeDashoffset = targetOffset;
-
-        // Numerical Count Up
-        let start = 0;
-        const duration = 1000;
-        const startTime = performance.now();
-
-        function update(now) {
-            const elapsed = now - startTime;
-            const progress = Math.min(elapsed / duration, 1);
-            const easeProgress = 1 - Math.pow(1 - progress, 3);
-            valEl.textContent = (easeProgress * targetVal).toFixed(1);
-
-            if (progress < 1) {
-                requestAnimationFrame(update);
+        function applyTheme(theme) {
+            document.documentElement.setAttribute('data-theme', theme);
+            localStorage.setItem('lms_theme', theme);
+            const icon = document.getElementById('themeIcon');
+            const text = document.getElementById('themeText');
+            if (theme === 'dark') {
+                icon.textContent = '☀️';
+                text.textContent = 'Light Mode';
+            } else {
+                icon.textContent = '🌙';
+                text.textContent = 'Dark Mode';
             }
         }
-        requestAnimationFrame(update);
-    }
 
-    document.getElementById('reviewForm').addEventListener('submit', async (e) => {
-        e.preventDefault();
-
-        const problem = document.getElementById('problem').value;
-        const code = document.getElementById('code').value;
-
-        document.getElementById('emptyState').style.display = 'none';
-        document.getElementById('reportContent').style.display = 'none';
-        document.getElementById('loader').style.display = 'block';
-
-        try {
-            const resp = await fetch('/api/v1/review', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    language: 'Java',
-                    submissions: [
-                        {
-                            question_text: problem,
-                            code: code
-                        }
-                    ]
-                })
-            });
-
-            const data = await resp.json();
-            
-            document.getElementById('loader').style.display = 'none';
-            document.getElementById('reportContent').style.display = 'block';
-
-            const item = (data.individual_reviews && data.individual_reviews[0]) ? data.individual_reviews[0] : {};
-            const scores = item.scores || {};
-
-            const overall = scores.overall_score || 0.0;
-            const comp = scores.completeness_score || 0.0;
-            const qual = scores.code_quality_score || 0.0;
-            const appr = scores.approach_taken_score || 0.0;
-
-            // Animate SVG radial progress ring and score
-            animateRadialScore(overall);
-
-            // Animate score bar fills
-            document.getElementById('compVal').textContent = comp.toFixed(1);
-            document.getElementById('qualVal').textContent = qual.toFixed(1);
-            document.getElementById('apprVal').textContent = appr.toFixed(1);
-
-            document.getElementById('compFill').style.width = (comp * 10) + '%';
-            document.getElementById('qualFill').style.width = (qual * 10) + '%';
-            document.getElementById('apprFill').style.width = (appr * 10) + '%';
-
-            document.getElementById('feedbackText').textContent = item.correctness_feedback || "None";
-            document.getElementById('errorsText').textContent = item.common_errors || "None";
-            document.getElementById('strengthsText').textContent = item.strengths || "None";
-            document.getElementById('weaknessesText').textContent = item.weaknesses || "None";
-            document.getElementById('recsText').textContent = item.recommendations || "None";
-
-            referenceCode = item.corrected_code || "// Reference solution";
-            document.getElementById('correctedCodeText').textContent = referenceCode;
-
-        } catch (err) {
-            document.getElementById('loader').style.display = 'none';
-            alert('Error evaluating submission: ' + err);
+        function toggleTheme() {
+            const current = document.documentElement.getAttribute('data-theme');
+            applyTheme(current === 'dark' ? 'light' : 'dark');
         }
-    });
 
-    function copyCode() {
-        if (!referenceCode) return;
-        navigator.clipboard.writeText(referenceCode);
-        const btn = document.getElementById('copyBtn');
-        btn.textContent = 'Copied!';
-        setTimeout(() => { btn.textContent = 'Copy'; }, 2000);
-    }
-</script>
+        initTheme();
+
+        // ── Radial SVG Score Ring & Counter Animation ──
+        function animateRadialScore(targetVal) {
+            const circle = document.getElementById('radialProgressCircle');
+            const valEl = document.getElementById('overallVal');
+
+            const perimeter = 264;
+            const targetOffset = perimeter - (perimeter * (targetVal / 10.0));
+
+            circle.style.strokeDashoffset = targetOffset;
+
+            let start = 0;
+            const duration = 1200;
+            const startTime = performance.now();
+
+            function update(now) {
+                const elapsed = now - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                const easeProgress = 1 - Math.pow(1 - progress, 4);
+                valEl.textContent = (easeProgress * targetVal).toFixed(1);
+
+                if (progress < 1) {
+                    requestAnimationFrame(update);
+                }
+            }
+            requestAnimationFrame(update);
+        }
+
+        document.getElementById('reviewForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const problem = document.getElementById('problem').value;
+            const code = document.getElementById('code').value;
+
+            document.getElementById('emptyState').style.display = 'none';
+            document.getElementById('reportContent').style.display = 'none';
+            document.getElementById('loader').style.display = 'block';
+
+            try {
+                const resp = await fetch('/api/v1/review', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        language: 'Java',
+                        submissions: [
+                            {
+                                question_text: problem,
+                                code: code
+                            }
+                        ]
+                    })
+                });
+
+                const data = await resp.json();
+
+                document.getElementById('loader').style.display = 'none';
+
+                const report = document.getElementById('reportContent');
+                report.style.display = 'block';
+
+                const item = (data.individual_reviews && data.individual_reviews[0]) ? data.individual_reviews[0] : {};
+                const scores = item.scores || {};
+
+                const overall = scores.overall_score || 0.0;
+                const comp = scores.completeness_score || 0.0;
+                const qual = scores.code_quality_score || 0.0;
+                const appr = scores.approach_taken_score || 0.0;
+
+                // Animate SVG radial progress ring and score
+                animateRadialScore(overall);
+
+                // Update Badge
+                const badge = document.getElementById('qualityBadge');
+                const label = data.summary_review ? data.summary_review.overall_quality_label : (overall >= 8.5 ? "Excellent" : (overall >= 7.0 ? "Good" : (overall >= 5.0 ? "Average" : "Critical")));
+                if (label) {
+                    badge.textContent = label;
+                    badge.style.display = 'inline-block';
+                    const colours = { Excellent: 'var(--accent-green)', Good: 'var(--accent-blue)', Average: 'var(--accent-amber)', Critical: 'var(--accent-red)' };
+                    badge.style.color = colours[label] || 'var(--accent-blue)';
+                    badge.style.background = colours[label] ? colours[label] + '22' : 'rgba(10,132,255,0.12)';
+                    badge.style.border = '1px solid ' + (colours[label] ? colours[label] + '55' : 'rgba(10,132,255,0.3)');
+                } else {
+                    badge.style.display = 'none';
+                }
+
+                // Animate score bar fills
+                document.getElementById('compVal').textContent = comp.toFixed(1);
+                document.getElementById('qualVal').textContent = qual.toFixed(1);
+                document.getElementById('apprVal').textContent = appr.toFixed(1);
+
+                setTimeout(() => {
+                    document.getElementById('compFill').style.width = (comp * 10) + '%';
+                    document.getElementById('qualFill').style.width = (qual * 10) + '%';
+                    document.getElementById('apprFill').style.width = (appr * 10) + '%';
+                }, 100);
+
+                // Save data for modal popups
+                evaluationData = {
+                    feedback: item.correctness_feedback || "None",
+                    errors: item.common_errors || "None",
+                    strengths: item.strengths || "None",
+                    weaknesses: item.weaknesses || "None",
+                    recs: item.recommendations || "None",
+                    code: item.corrected_code || "// Reference solution"
+                };
+
+                // Populate segregated preview text
+                document.getElementById('blockFeedbackText').textContent = evaluationData.feedback;
+                document.getElementById('blockErrorsText').textContent = evaluationData.errors;
+                document.getElementById('blockStrengthsText').textContent = evaluationData.strengths;
+                document.getElementById('blockWeaknessesText').textContent = evaluationData.weaknesses;
+                document.getElementById('blockRecsText').textContent = evaluationData.recs;
+                document.getElementById('blockCodeText').textContent = evaluationData.code.substring(0, 100) + '...';
+
+            } catch (err) {
+                document.getElementById('loader').style.display = 'none';
+                alert('Error evaluating submission: ' + err);
+            }
+        });
+
+        // ── Apple Vision Pro Popup Modal Handlers ──
+        let activeModalKey = '';
+
+        function openModal(key) {
+            activeModalKey = key;
+            const overlay = document.getElementById('modalOverlay');
+            const titleTag = document.getElementById('modalTitleTag');
+            const body = document.getElementById('modalBody');
+
+            const modalConfigs = {
+                feedback: { title: '💬 Executive Feedback', tagClass: 'feedback', content: evaluationData.feedback },
+                errors: { title: '⚠️ Common Errors & Violations', tagClass: 'err', content: evaluationData.errors },
+                strengths: { title: '💪 Key Strengths', tagClass: 'str', content: evaluationData.strengths },
+                weaknesses: { title: '📌 Weaknesses & Gaps', tagClass: 'weak', content: evaluationData.weaknesses },
+                recs: { title: '💡 Recommendations', tagClass: 'rec', content: evaluationData.recs },
+                code: { title: '💻 Reference Solution', tagClass: 'code', content: evaluationData.code }
+            };
+
+            const conf = modalConfigs[key] || modalConfigs.feedback;
+            titleTag.className = `modal-title-tag block-tag ${conf.tagClass}`;
+            titleTag.textContent = conf.title;
+
+            if (key === 'code') {
+                body.innerHTML = `<pre class="modal-code-block"><code>${escapeHtml(conf.content)}</code></pre>`;
+            } else {
+                body.innerHTML = `<p>${escapeHtml(conf.content).replace(/\n/g, '<br>')}</p>`;
+            }
+
+            overlay.classList.add('active');
+        }
+
+        function closeModal() {
+            document.getElementById('modalOverlay').classList.remove('active');
+        }
+
+        function closeModalOnOverlay(e) {
+            if (e.target.id === 'modalOverlay') {
+                closeModal();
+            }
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeModal();
+        });
+
+        function copyModalContent() {
+            if (!activeModalKey || !evaluationData[activeModalKey]) return;
+            navigator.clipboard.writeText(evaluationData[activeModalKey]);
+            const btn = document.getElementById('modalCopyBtn');
+            btn.textContent = '✓ Copied!';
+            btn.style.background = 'var(--accent-green)';
+            setTimeout(() => {
+                btn.textContent = 'Copy Details';
+                btn.style.background = 'var(--accent-blue)';
+            }, 2000);
+        }
+
+        function escapeHtml(str) {
+            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+    </script>
 
 </body>
+
 </html>
