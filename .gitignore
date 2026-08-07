@@ -5,3 +5,6 @@ venv/
 .env
 .vscode/
 .idea/
+*.pyc
+*.log
+app.log

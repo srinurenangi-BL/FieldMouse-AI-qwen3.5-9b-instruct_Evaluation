@@ -4,7 +4,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Code Reviewer</title>
+    <meta name="description" content="AI Code Reviewer — LLM-Powered Code Review and Scoring Platform">
+    <title>AI Code Reviewer — LLM Intelligence</title>
     <link
         href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
         rel="stylesheet">
@@ -304,25 +305,6 @@
             resize: vertical;
         }
 
-        .language-select {
-            width: 100%;
-            background: var(--input-bg);
-            border: 1px solid var(--glass-border);
-            border-radius: 14px;
-            color: var(--text-main);
-            padding: 12px 16px;
-            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", sans-serif;
-            font-size: 14px;
-            font-weight: 600;
-            outline: none;
-            cursor: pointer;
-        }
-
-        .language-select option {
-            background: var(--bg-canvas);
-            color: var(--text-main);
-        }
-
         textarea:focus {
             border-color: var(--accent-blue);
             box-shadow: 0 0 0 4px var(--accent-blue-soft), 0 0 20px var(--glow-shadow);
@@ -332,7 +314,7 @@
         textarea.code-area {
             font-family: 'JetBrains Mono', monospace;
             font-size: 13.5px;
-            min-height: 280px;
+            min-height: 260px;
             white-space: pre;
         }
 
@@ -388,6 +370,8 @@
             padding: 24px;
             margin-bottom: 24px;
             box-shadow: 0 12px 32px rgba(0, 0, 0, 0.1);
+            flex-wrap: wrap;
+            gap: 16px;
         }
 
         .radial-meter {
@@ -450,6 +434,7 @@
             gap: 12px;
             flex-grow: 1;
             max-width: 270px;
+            min-width: 180px;
         }
 
         .pill-item {
@@ -543,33 +528,17 @@
             animation: appleCascade 0.7s var(--apple-spring) forwards;
         }
 
-        .response-card-block:nth-child(1) {
-            animation-delay: 0.1s;
-        }
-
-        .response-card-block:nth-child(2) {
-            animation-delay: 0.2s;
-        }
-
-        .response-card-block:nth-child(3) {
-            animation-delay: 0.3s;
-        }
-
-        .response-card-block:nth-child(4) {
-            animation-delay: 0.4s;
-        }
-
+        .response-card-block:nth-child(1) { animation-delay: 0.1s; }
+        .response-card-block:nth-child(2) { animation-delay: 0.2s; }
+        .response-card-block:nth-child(3) { animation-delay: 0.3s; }
+        .response-card-block:nth-child(4) { animation-delay: 0.4s; }
         .response-card-block:nth-child(5) {
             animation-delay: 0.5s;
-        }
-
-        .response-card-block:nth-child(6) {
-            animation-delay: 0.6s;
             grid-column: span 2;
         }
 
         @media (max-width: 600px) {
-            .response-card-block:nth-child(6) {
+            .response-card-block:nth-child(5) {
                 grid-column: span 1;
             }
         }
@@ -601,29 +570,12 @@
             gap: 8px;
         }
 
-        .block-tag.feedback {
-            color: var(--accent-blue);
-        }
-
-        .block-tag.err {
-            color: var(--accent-red);
-        }
-
-        .block-tag.str {
-            color: var(--accent-green);
-        }
-
-        .block-tag.weak {
-            color: var(--accent-amber);
-        }
-
-        .block-tag.rec {
-            color: var(--accent-purple);
-        }
-
-        .block-tag.code {
-            color: var(--accent-cyan);
-        }
+        .block-tag.feedback { color: var(--accent-blue); }
+        .block-tag.err { color: var(--accent-red); }
+        .block-tag.str { color: var(--accent-green); }
+        .block-tag.weak { color: var(--accent-amber); }
+        .block-tag.rec { color: var(--accent-purple); }
+        .block-tag.code { color: var(--accent-cyan); }
 
         .block-expand-icon {
             font-size: 14px;
@@ -642,6 +594,7 @@
             color: var(--text-main);
             display: -webkit-box;
             -webkit-line-clamp: 2;
+            line-clamp: 2;
             -webkit-box-orient: vertical;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -891,6 +844,8 @@
                 </div>
 
                 <form id="reviewForm">
+                    <input type="hidden" id="targetLanguage" name="targetLanguage" value="">
+
                     <div class="form-group">
                         <label for="problem">Question Statement & Constraints</label>
                         <textarea id="problem" name="problem" placeholder="Enter problem statement and constraints..."
@@ -928,7 +883,11 @@
                 </div>
 
                 <div id="reportContent" style="display: none;">
-                    <!-- Radial Score Meter Hero -->
+                    <div id="mismatchBanner" style="display:none; background: rgba(255, 149, 0, 0.15); border: 1px solid var(--accent-amber); color: var(--accent-amber); padding: 14px 20px; border-radius: 16px; margin-bottom: 20px; font-size: 13.5px; font-weight: 600; box-shadow: 0 4px 16px rgba(255, 149, 0, 0.15);">
+                        <span id="mismatchText">⚠️ Language Mismatch Detected</span>
+                    </div>
+
+                    <!-- Radial Score Hero -->
                     <div class="score-hero-container">
                         <div class="radial-meter">
                             <svg viewBox="0 0 100 100">
@@ -1024,16 +983,6 @@
                             <div id="blockRecsText" class="block-preview-text">None</div>
                             <div class="click-hint"><span>Click to inspect details</span></div>
                         </div>
-
-                        <!-- Block 6: Reference Solution -->
-                        <div class="response-card-block" onclick="openModal('code')">
-                            <div class="block-header">
-                                <span class="block-tag code">💻 Reference Solution</span>
-                                <span class="block-expand-icon">↗</span>
-                            </div>
-                            <div id="blockCodeText" class="block-preview-text">// Reference code ready</div>
-                            <div class="click-hint"><span>Click to open code editor</span></div>
-                        </div>
                     </div>
                 </div>
 
@@ -1050,8 +999,7 @@
             </div>
             <div id="modalBody" class="modal-body"></div>
             <div class="modal-footer">
-                <button type="button" class="btn-modal-copy" id="modalCopyBtn" onclick="copyModalContent()">Copy
-                    Details</button>
+                <button type="button" class="btn-modal-copy" id="modalCopyBtn" onclick="copyModalContent()">Copy Details</button>
             </div>
         </div>
     </div>
@@ -1092,11 +1040,10 @@
             const valEl = document.getElementById('overallVal');
 
             const perimeter = 264;
-            const targetOffset = perimeter - (perimeter * (targetVal / 10.0));
+            const targetOffset = perimeter - (perimeter * (Math.min(Math.max(targetVal, 0), 10) / 10.0));
 
             circle.style.strokeDashoffset = targetOffset;
 
-            let start = 0;
             const duration = 1200;
             const startTime = performance.now();
 
@@ -1116,6 +1063,8 @@
         document.getElementById('reviewForm').addEventListener('submit', async (e) => {
             e.preventDefault();
 
+            const targetLangInput = document.getElementById('targetLanguage');
+            const targetLanguage = (targetLangInput && targetLangInput.value) ? targetLangInput.value.trim() : null;
             const problem = document.getElementById('problem').value;
             const code = document.getElementById('code').value;
 
@@ -1123,20 +1072,30 @@
             document.getElementById('reportContent').style.display = 'none';
             document.getElementById('loader').style.display = 'block';
 
+            const payload = {
+                submissions: [
+                    {
+                        question_text: problem,
+                        code: code
+                    }
+                ]
+            };
+
+            if (targetLanguage) {
+                payload.target_language = targetLanguage;
+            }
+
             try {
-                const resp = await fetch('/api/v1/review', {
+                const resp = await fetch('/review', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        language: 'Java',
-                        submissions: [
-                            {
-                                question_text: problem,
-                                code: code
-                            }
-                        ]
-                    })
+                    body: JSON.stringify(payload)
                 });
+
+                if (!resp.ok) {
+                    const errData = await resp.json().catch(() => ({ detail: resp.statusText }));
+                    throw new Error(errData.detail || 'Evaluation request failed');
+                }
 
                 const data = await resp.json();
 
@@ -1146,9 +1105,10 @@
                 report.style.display = 'block';
 
                 const item = (data.individual_reviews && data.individual_reviews[0]) ? data.individual_reviews[0] : {};
+                const summary = (data.summary_review && typeof data.summary_review === 'object') ? data.summary_review : {};
                 const scores = item.scores || {};
 
-                const overall = scores.overall_score || 0.0;
+                const overall = summary.overall_average_score || scores.overall_score || 0.0;
                 const comp = scores.completeness_score || 0.0;
                 const qual = scores.code_quality_score || 0.0;
                 const appr = scores.approach_taken_score || 0.0;
@@ -1158,14 +1118,21 @@
 
                 // Update Badge
                 const badge = document.getElementById('qualityBadge');
-                const label = data.summary_review ? data.summary_review.overall_quality_label : (overall >= 8.5 ? "Excellent" : (overall >= 7.0 ? "Good" : (overall >= 5.0 ? "Average" : "Critical")));
+                const label = summary.overall_quality_label || (overall >= 8.5 ? "Excellent" : (overall >= 7.0 ? "Good" : (overall >= 5.0 ? "Average" : "Critical")));
                 if (label) {
                     badge.textContent = label;
                     badge.style.display = 'inline-block';
-                    const colours = { Excellent: 'var(--accent-green)', Good: 'var(--accent-blue)', Average: 'var(--accent-amber)', Critical: 'var(--accent-red)' };
-                    badge.style.color = colours[label] || 'var(--accent-blue)';
-                    badge.style.background = colours[label] ? colours[label] + '22' : 'rgba(10,132,255,0.12)';
-                    badge.style.border = '1px solid ' + (colours[label] ? colours[label] + '55' : 'rgba(10,132,255,0.3)');
+                    const colours = {
+                        Excellent: 'var(--accent-green)',
+                        Good: 'var(--accent-blue)',
+                        Average: 'var(--accent-amber)',
+                        Poor: 'var(--accent-amber)',
+                        Critical: 'var(--accent-red)'
+                    };
+                    const colorVal = colours[label] || 'var(--accent-blue)';
+                    badge.style.color = colorVal;
+                    badge.style.background = colorVal + '22';
+                    badge.style.border = '1px solid ' + colorVal + '55';
                 } else {
                     badge.style.display = 'none';
                 }
@@ -1176,20 +1143,29 @@
                 document.getElementById('apprVal').textContent = appr.toFixed(1);
 
                 setTimeout(() => {
-                    document.getElementById('compFill').style.width = (comp * 10) + '%';
-                    document.getElementById('qualFill').style.width = (qual * 10) + '%';
-                    document.getElementById('apprFill').style.width = (appr * 10) + '%';
+                    document.getElementById('compFill').style.width = Math.min(comp * 10, 100) + '%';
+                    document.getElementById('qualFill').style.width = Math.min(qual * 10, 100) + '%';
+                    document.getElementById('apprFill').style.width = Math.min(appr * 10, 100) + '%';
                 }, 100);
 
                 // Save data for modal popups
                 evaluationData = {
                     feedback: item.correctness_feedback || "None",
-                    errors: item.common_errors || "None",
-                    strengths: item.strengths || "None",
-                    weaknesses: item.weaknesses || "None",
-                    recs: item.recommendations || "None",
-                    code: item.corrected_code || "// Reference solution"
+                    errors: summary.common_errors || "None",
+                    strengths: summary.strengths || "None",
+                    weaknesses: summary.weaknesses || "None",
+                    recs: summary.recommendations || "None"
                 };
+
+                const mismatchBanner = document.getElementById('mismatchBanner');
+                const mismatchText = document.getElementById('mismatchText');
+                if (evaluationData.feedback.includes('Language Mismatch') || evaluationData.errors.includes('Language Mismatch')) {
+                    const matchMsg = evaluationData.feedback.match(/⚠️ Language Mismatch:[^\.\n]+/);
+                    mismatchText.textContent = matchMsg ? matchMsg[0] : '⚠️ Language Mismatch Detected';
+                    mismatchBanner.style.display = 'block';
+                } else {
+                    mismatchBanner.style.display = 'none';
+                }
 
                 // Populate segregated preview text
                 document.getElementById('blockFeedbackText').textContent = evaluationData.feedback;
@@ -1197,11 +1173,11 @@
                 document.getElementById('blockStrengthsText').textContent = evaluationData.strengths;
                 document.getElementById('blockWeaknessesText').textContent = evaluationData.weaknesses;
                 document.getElementById('blockRecsText').textContent = evaluationData.recs;
-                document.getElementById('blockCodeText').textContent = evaluationData.code.substring(0, 100) + '...';
 
             } catch (err) {
                 document.getElementById('loader').style.display = 'none';
-                alert('Error evaluating submission: ' + err);
+                document.getElementById('emptyState').style.display = 'block';
+                alert('Error evaluating submission: ' + err.message);
             }
         });
 
@@ -1219,19 +1195,13 @@
                 errors: { title: '⚠️ Common Errors & Violations', tagClass: 'err', content: evaluationData.errors },
                 strengths: { title: '💪 Key Strengths', tagClass: 'str', content: evaluationData.strengths },
                 weaknesses: { title: '📌 Weaknesses & Gaps', tagClass: 'weak', content: evaluationData.weaknesses },
-                recs: { title: '💡 Recommendations', tagClass: 'rec', content: evaluationData.recs },
-                code: { title: '💻 Reference Solution', tagClass: 'code', content: evaluationData.code }
+                recs: { title: '💡 Recommendations', tagClass: 'rec', content: evaluationData.recs }
             };
 
             const conf = modalConfigs[key] || modalConfigs.feedback;
             titleTag.className = `modal-title-tag block-tag ${conf.tagClass}`;
             titleTag.textContent = conf.title;
-
-            if (key === 'code') {
-                body.innerHTML = `<pre class="modal-code-block"><code>${escapeHtml(conf.content)}</code></pre>`;
-            } else {
-                body.innerHTML = `<p>${escapeHtml(conf.content).replace(/\n/g, '<br>')}</p>`;
-            }
+            body.innerHTML = `<p>${escapeHtml(conf.content).replace(/\n/g, '<br>')}</p>`;
 
             overlay.classList.add('active');
         }
@@ -1263,7 +1233,7 @@
         }
 
         function escapeHtml(str) {
-            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+            return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
         }
     </script>
 

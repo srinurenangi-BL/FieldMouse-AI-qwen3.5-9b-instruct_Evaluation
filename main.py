@@ -1,182 +1,187 @@
-from __future__ import annotations
-
+import ollama
+import os
+import json
 import asyncio
-import httpx
+import logging
+import time
 from pathlib import Path
-from typing import List, Optional, Union
+from dotenv import load_dotenv
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import HTMLResponse, FileResponse
 
-from fastapi import FastAPI, HTTPException, Form
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
-
-from config import TEMPLATES_DIR
 from schemas import (
-    CodeSubmission,
     CodeReviewRequest,
+    PromptDrivenCodeReviewResponse,
     IndividualReview,
     SummaryReview,
-    PromptDrivenCodeReviewResponse,
     ScoreBreakdown
 )
-from prompt import (
-    build_stage1_syntax_correctness_prompt,
-    build_stage2_algorithm_efficiency_prompt,
-    build_stage3_structure_naming_prompt,
-    build_stage4_error_security_prompt,
-    build_stage5_constraints_testing_prompt,
-    build_stage6_aggregator_prompt
-)
-from llm_client import send_prompt, LLMClientError
-from response_validator import parse_and_validate_llm_json, JSONValidationError
+from prompts import format_submissions, build_language_detection_prompt, build_evaluation_prompt
 
+load_dotenv()
+
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5-coder:7b-instruct")
+LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.1"))
+LLM_TIMEOUT_SECONDS = float(os.getenv("LLM_TIMEOUT_SECONDS", "300"))
+DEFAULT_TARGET_LANGUAGE = os.getenv("DEFAULT_TARGET_LANGUAGE", "Java")
+TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler("app.log", mode="a", encoding="utf-8")
+    ]
+)
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
-    title="LMS Code Evaluator & Quality Review API",
-    description="Production-grade AI Code Evaluation REST API backed by Qwen 2.5 Coder 7B 6-Stage Split Pipeline.",
-    version="6.0.0"
+    title="QWEN Code Evaluator",
+    description="LLM-powered code review and scoring API",
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+ollama_client = ollama.AsyncClient()
+
+
+class LLMClientError(Exception):
+    pass
+
+
+async def send_prompt(prompt_text: str = "", json_mode: bool = False) -> str:
+    options = {"temperature": LLM_TEMPERATURE}
+    kwargs = {
+        "model": OLLAMA_MODEL,
+        "messages": [
+            {"role": "system", "content": "You are a fair, precise code evaluator. Return strictly what was requested."},
+            {"role": "user", "content": prompt_text},
+        ],
+        "options": options,
+        "keep_alive": 0,
+    }
+
+    if json_mode:
+        kwargs["format"] = "json"
+
+    max_attempts = 2
+    for attempt in range(1, max_attempts + 1):
+        try:
+            response = await ollama_client.chat(**kwargs)
+            content = response["message"]["content"]
+            if content:
+                return content.strip()
+            raise LLMClientError("LLM returned empty content.")
+        except LLMClientError:
+            raise
+        except Exception as e:
+            if attempt < max_attempts:
+                await asyncio.sleep(1.0)
+                continue
+            raise LLMClientError(f"Failed after {max_attempts} attempts: {e}")
 
 
 @app.get("/", response_class=HTMLResponse)
-async def serve_ui():
-    """Serves the frontend manual check UI from templates/index.html."""
-    index_path = TEMPLATES_DIR / "index.html"
-    if not index_path.exists():
-        raise HTTPException(404, "Frontend templates/index.html not found.")
-    return index_path.read_text(encoding="utf-8")
+async def home():
+    return FileResponse(TEMPLATES_DIR / "index.html", media_type="text/html")
 
 
-async def evaluate_single_submission(
-    language: str,
-    submission: CodeSubmission
-) -> IndividualReview:
-    """Evaluates a single code submission through the 6-stage LLM split pipeline."""
-    full_q = (
-        f"{submission.question_text}\n\nSPECIFIC_INSTRUCTIONS: {submission.specific_instructions}"
-        if submission.specific_instructions
-        else submission.question_text
-    )
-
-    # ──── STAGES 1 to 5: Concurrent Category Evaluations ────
-    p1 = build_stage1_syntax_correctness_prompt(language, full_q, submission.code)
-    p2 = build_stage2_algorithm_efficiency_prompt(language, full_q, submission.code)
-    p3 = build_stage3_structure_naming_prompt(language, full_q, submission.code)
-    p4 = build_stage4_error_security_prompt(language, full_q, submission.code)
-    p5 = build_stage5_constraints_testing_prompt(language, full_q, submission.code)
-
-    s1_out, s2_out, s3_out, s4_out, s5_out = await asyncio.gather(
-        send_prompt(p1, is_json_format=False),
-        send_prompt(p2, is_json_format=False),
-        send_prompt(p3, is_json_format=False),
-        send_prompt(p4, is_json_format=False),
-        send_prompt(p5, is_json_format=False)
-    )
-
-    # ──── STAGE 6: Aggregator & Reference Code Synthesis ────
-    p6 = build_stage6_aggregator_prompt(
-        language=language,
-        question=full_q,
-        student_code=submission.code,
-        stage1_out=s1_out,
-        stage2_out=s2_out,
-        stage3_out=s3_out,
-        stage4_out=s4_out,
-        stage5_out=s5_out
-    )
-
-    raw_aggregator_text = await send_prompt(p6, is_json_format=True)
-    parsed_json = parse_and_validate_llm_json(raw_aggregator_text)
-
-    ind_list = parsed_json.get("individual_reviews", [])
-    if ind_list and isinstance(ind_list, list) and isinstance(ind_list[0], dict):
-        item = ind_list[0]
-        scores_raw = item.get("scores", {}) if isinstance(item.get("scores"), dict) else {}
-        return IndividualReview(
-            question_text=submission.question_text,
-            correctness_feedback=str(item.get("correctness_feedback", "")),
-            common_errors=str(item.get("common_errors", "None")),
-            strengths=str(item.get("strengths", "None")),
-            weaknesses=str(item.get("weaknesses", "None")),
-            recommendations=str(item.get("recommendations", "None")),
-            scores=ScoreBreakdown(
-                completeness_score=float(scores_raw.get("completeness_score", 0.0)),
-                code_quality_score=float(scores_raw.get("code_quality_score", 0.0)),
-                approach_taken_score=float(scores_raw.get("approach_taken_score", 0.0)),
-                overall_score=float(scores_raw.get("overall_score", 0.0))
-            ),
-            corrected_code=item.get("corrected_code")
-        )
-    else:
-        scores_raw = parsed_json.get("scores", {}) if isinstance(parsed_json.get("scores"), dict) else {}
-        return IndividualReview(
-            question_text=submission.question_text,
-            correctness_feedback=str(parsed_json.get("correctness_feedback", "")),
-            common_errors=str(parsed_json.get("common_errors", "None")),
-            strengths=str(parsed_json.get("strengths", "None")),
-            weaknesses=str(parsed_json.get("weaknesses", "None")),
-            recommendations=str(parsed_json.get("recommendations", "None")),
-            scores=ScoreBreakdown(
-                completeness_score=float(scores_raw.get("completeness_score", 0.0)),
-                code_quality_score=float(scores_raw.get("code_quality_score", 0.0)),
-                approach_taken_score=float(scores_raw.get("approach_taken_score", 0.0)),
-                overall_score=float(scores_raw.get("overall_score", 0.0))
-            ),
-            corrected_code=parsed_json.get("corrected_code")
-        )
-
-
-@app.post("/api/v1/review", response_model=PromptDrivenCodeReviewResponse)
+@app.post("/review", response_model=PromptDrivenCodeReviewResponse)
 async def review_code(request: CodeReviewRequest):
-    """Main POST endpoint to review code submissions using the LLM evaluation pipeline."""
+    req_start_time = time.perf_counter()
+    logger.info("=== [PROCESS STARTED] Code Evaluation Request Received ===")
+
     if not request.submissions:
-        raise HTTPException(status_code=400, detail="At least one submission must be provided in the request.")
+        logger.error("[REJECTED] No code submissions provided in request payload.")
+        raise HTTPException(status_code=400, detail="No submissions provided.")
+
+    logger.info(f"[INPUT RECEIVED] Target Language: {request.target_language} | Total Submissions: {len(request.submissions)}")
+
+    logger.info("[STEP 1/5] Initiating Language Detection check...")
+    first_code = request.submissions[0].code
+    lang_prompt = build_language_detection_prompt(request.target_language, first_code)
+
+    lang_start = time.perf_counter()
+    logger.info(f"[LLM INPUT SENT] Sending Language Detection prompt to model '{OLLAMA_MODEL}'...")
+    detected_lang = None
+    is_mismatch = False
+    lang_duration = 0.0
 
     try:
-        reviews: List[IndividualReview] = []
-        for sub in request.submissions:
-            rev = await evaluate_single_submission(request.language, sub)
-            reviews.append(rev)
+        lang_raw = await send_prompt(lang_prompt, json_mode=True)
+        lang_duration = time.perf_counter() - lang_start
+        logger.info(f"[LLM RESPONSE RECEIVED] Language Detection completed by LLM in {lang_duration:.2f} seconds.")
 
-        summary_rev: Optional[Union[SummaryReview, str]] = None
-        if len(reviews) > 1:
-            total_avg = round(sum(r.scores.overall_score for r in reviews) / len(reviews), 1)
-            label = "Excellent" if total_avg >= 8.5 else ("Good" if total_avg >= 7.0 else ("Average" if total_avg >= 5.0 else "Critical"))
-            summary_rev = SummaryReview(
-                overall_average_score=total_avg,
-                overall_quality_label=label,
-                common_errors="; ".join(r.common_errors for r in reviews if r.common_errors != "None"),
-                strengths="; ".join(r.strengths for r in reviews if r.strengths != "None"),
-                weaknesses="; ".join(r.weaknesses for r in reviews if r.weaknesses != "None"),
-                recommendations="; ".join(r.recommendations for r in reviews if r.recommendations != "None")
+        lang_result = json.loads(lang_raw)
+        if not lang_result.get("match", True):
+            is_mismatch = True
+            detected_lang = lang_result.get("detected_language", "unknown")
+            logger.warning(f"[LANGUAGE MISMATCH] Expected '{request.target_language}', but detected '{detected_lang}'. Assigning 0.0 scores and returning explanation.")
+        else:
+            logger.info(f"[SUCCESS] Language check passed. Submitted code matches expected target language '{request.target_language}'.")
+    except Exception as e:
+        logger.warning(f"[WARNING] Language detection skipped due to error: {e}")
+
+    if is_mismatch and detected_lang:
+        mismatch_msg = f"⚠️ Language Mismatch: Submitted code was detected as {detected_lang}, but expected {request.target_language}."
+        
+        reviews = []
+        for sub in request.submissions:
+            reviews.append(
+                IndividualReview(
+                    question_text=sub.question_text,
+                    correctness_feedback=f"{mismatch_msg} Evaluation skipped and 0.0 score assigned.",
+                    scores=ScoreBreakdown(
+                        completeness_score=0.0,
+                        code_quality_score=0.0,
+                        approach_taken_score=0.0,
+                        overall_score=0.0
+                    )
+                )
             )
 
-        return PromptDrivenCodeReviewResponse(
-            individual_reviews=reviews,
-            summary_review=summary_rev
+        summary = SummaryReview(
+            overall_average_score=0.0,
+            overall_quality_label="Critical",
+            common_errors=f"{mismatch_msg}",
+            strengths="None",
+            weaknesses=f"Submitted code is written in {detected_lang} instead of requested {request.target_language}.",
+            recommendations=f"Please rewrite and submit your solution in {request.target_language}."
         )
 
-    except LLMClientError as exc:
-        raise HTTPException(status_code=503, detail=f"LLM communication error: {exc}")
-    except JSONValidationError as exc:
-        raise HTTPException(status_code=422, detail=f"LLM output validation error: {exc}")
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Internal evaluation error: {exc}")
+        total_duration = time.perf_counter() - req_start_time
+        logger.info(f"=== [PROCESS COMPLETED - LANGUAGE MISMATCH ZERO SCORE] Total Time: {total_duration:.2f}s (Language Detection: {lang_duration:.2f}s) ===")
+        
+        return PromptDrivenCodeReviewResponse(individual_reviews=reviews, summary_review=summary)
 
+    logger.info("[STEP 2/5] Formatting code submissions...")
+    formatted = format_submissions(request.submissions)
 
-@app.get("/api/v1/health")
-async def health():
-    """Health check endpoint to verify API and LLM connectivity."""
+    logger.info("[STEP 3/5] Building evaluation prompt...")
+    eval_prompt = build_evaluation_prompt(
+        target_language=request.target_language,
+        ques_ans_content_with_inst=formatted,
+        summary_gen_flag=True,
+    )
+
+    logger.info(f"[STEP 4/5] Sending main evaluation prompt ({len(eval_prompt)} characters) to LLM model '{OLLAMA_MODEL}'...")
+    eval_start = time.perf_counter()
     try:
-        async with httpx.AsyncClient(timeout=3.0) as client:
-            from config import OLLAMA_BASE_URL
-            r = await client.get(f"{OLLAMA_BASE_URL}/api/tags")
-            return {"status": "healthy", "ollama": "connected" if r.status_code == 200 else "error"}
-    except Exception:
-        return {"status": "healthy", "ollama": "unreachable"}
+        raw_response = await send_prompt(eval_prompt, json_mode=True)
+        eval_duration = time.perf_counter() - eval_start
+        logger.info(f"[LLM RESPONSE RECEIVED] Code Evaluation completed by LLM in {eval_duration:.2f} seconds.")
+    except LLMClientError as e:
+        logger.error(f"[ERROR] LLM evaluation call failed after {time.perf_counter() - eval_start:.2f}s: {e}")
+        raise HTTPException(status_code=502, detail=f"LLM error: {e}")
+
+    logger.info("[STEP 5/5] Parsing LLM response into structured output...")
+    try:
+        result = json.loads(raw_response)
+    except json.JSONDecodeError as e:
+        logger.error(f"[ERROR] Failed to parse JSON response from LLM: {e}")
+        raise HTTPException(status_code=502, detail=f"LLM returned invalid JSON: {e}")
+
+    total_duration = time.perf_counter() - req_start_time
+    total_llm_time = lang_duration + eval_duration
+    logger.info(f"=== [PROCESS COMPLETED] Total Request Time: {total_duration:.2f}s | Total LLM Time: {total_llm_time:.2f}s (Language Detection: {lang_duration:.2f}s, Code Evaluation: {eval_duration:.2f}s) ===")
+
+    return PromptDrivenCodeReviewResponse(**result)
