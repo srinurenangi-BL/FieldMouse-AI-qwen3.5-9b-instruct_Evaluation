@@ -14,7 +14,8 @@ from schemas import (
     PromptDrivenCodeReviewResponse,
     IndividualReview,
     SummaryReview,
-    ScoreBreakdown
+    ScoreBreakdown,
+    ExecutionMetrics
 )
 from prompts import format_submissions, build_language_detection_prompt, build_evaluation_prompt
 
@@ -42,6 +43,18 @@ app = FastAPI(
 )
 
 ollama_client = ollama.AsyncClient()
+
+METRICS_STATS = {
+    "total_requests": 0,
+    "total_duration": 0.0
+}
+
+
+def record_metrics(req_duration: float):
+    METRICS_STATS["total_requests"] += 1
+    METRICS_STATS["total_duration"] += req_duration
+    avg = METRICS_STATS["total_duration"] / METRICS_STATS["total_requests"]
+    return METRICS_STATS["total_requests"], round(avg, 2)
 
 
 class LLMClientError(Exception):
@@ -85,6 +98,15 @@ async def home():
     return FileResponse(TEMPLATES_DIR / "index.html", media_type="text/html")
 
 
+@app.get("/api/metrics")
+async def get_metrics():
+    avg = (METRICS_STATS["total_duration"] / METRICS_STATS["total_requests"]) if METRICS_STATS["total_requests"] > 0 else 0.0
+    return {
+        "total_requests_processed": METRICS_STATS["total_requests"],
+        "running_average_duration_seconds": round(avg, 2)
+    }
+
+
 @app.post("/review", response_model=PromptDrivenCodeReviewResponse)
 async def review_code(request: CodeReviewRequest):
     req_start_time = time.perf_counter()
@@ -112,9 +134,18 @@ async def review_code(request: CodeReviewRequest):
         logger.info(f"[LLM RESPONSE RECEIVED] Language Detection completed by LLM in {lang_duration:.2f} seconds.")
 
         lang_result = json.loads(lang_raw)
-        if not lang_result.get("match", True):
-            is_mismatch = True
-            detected_lang = lang_result.get("detected_language", "unknown")
+        raw_match = lang_result.get("match", True)
+        detected_lang = str(lang_result.get("detected_language", "unknown")).strip()
+
+        target_clean = request.target_language.strip().lower()
+        detected_clean = detected_lang.lower()
+
+        if detected_clean == target_clean or (detected_clean and detected_clean in target_clean) or (target_clean and target_clean in detected_clean):
+            is_mismatch = False
+        else:
+            is_mismatch = not raw_match if isinstance(raw_match, bool) else (str(raw_match).lower() == "false")
+
+        if is_mismatch:
             logger.warning(f"[LANGUAGE MISMATCH] Expected '{request.target_language}', but detected '{detected_lang}'. Assigning 0.0 scores and returning explanation.")
         else:
             logger.info(f"[SUCCESS] Language check passed. Submitted code matches expected target language '{request.target_language}'.")
@@ -123,7 +154,7 @@ async def review_code(request: CodeReviewRequest):
 
     if is_mismatch and detected_lang:
         mismatch_msg = f"⚠️ Language Mismatch: Submitted code was detected as {detected_lang}, but expected {request.target_language}."
-        
+
         reviews = []
         for sub in request.submissions:
             reviews.append(
@@ -149,9 +180,23 @@ async def review_code(request: CodeReviewRequest):
         )
 
         total_duration = time.perf_counter() - req_start_time
-        logger.info(f"=== [PROCESS COMPLETED - LANGUAGE MISMATCH ZERO SCORE] Total Time: {total_duration:.2f}s (Language Detection: {lang_duration:.2f}s) ===")
-        
-        return PromptDrivenCodeReviewResponse(individual_reviews=reviews, summary_review=summary)
+        total_reqs, running_avg = record_metrics(total_duration)
+
+        metrics = ExecutionMetrics(
+            request_duration_seconds=round(total_duration, 2),
+            lang_detection_duration_seconds=round(lang_duration, 2),
+            code_eval_duration_seconds=0.0,
+            total_requests_processed=total_reqs,
+            running_average_duration_seconds=running_avg
+        )
+
+        logger.info(f"=== [PROCESS COMPLETED - LANGUAGE MISMATCH ZERO SCORE] Total Request Time: {total_duration:.2f}s (Language Detection: {lang_duration:.2f}s) | Total Requests Processed: {total_reqs} | Running Average Response Time: {running_avg:.2f}s ===")
+
+        return PromptDrivenCodeReviewResponse(
+            individual_reviews=reviews,
+            summary_review=summary,
+            execution_metrics=metrics
+        )
 
     logger.info("[STEP 2/5] Formatting code submissions...")
     formatted = format_submissions(request.submissions)
@@ -182,6 +227,17 @@ async def review_code(request: CodeReviewRequest):
 
     total_duration = time.perf_counter() - req_start_time
     total_llm_time = lang_duration + eval_duration
-    logger.info(f"=== [PROCESS COMPLETED] Total Request Time: {total_duration:.2f}s | Total LLM Time: {total_llm_time:.2f}s (Language Detection: {lang_duration:.2f}s, Code Evaluation: {eval_duration:.2f}s) ===")
+    total_reqs, running_avg = record_metrics(total_duration)
 
+    metrics = ExecutionMetrics(
+        request_duration_seconds=round(total_duration, 2),
+        lang_detection_duration_seconds=round(lang_duration, 2),
+        code_eval_duration_seconds=round(eval_duration, 2),
+        total_requests_processed=total_reqs,
+        running_average_duration_seconds=running_avg
+    )
+
+    logger.info(f"=== [PROCESS COMPLETED] Total Request Time: {total_duration:.2f}s | Total LLM Time: {total_llm_time:.2f}s (Language Detection: {lang_duration:.2f}s, Code Evaluation: {eval_duration:.2f}s) | Total Requests Processed: {total_reqs} | Running Average Response Time: {running_avg:.2f}s ===")
+
+    result["execution_metrics"] = metrics.model_dump()
     return PromptDrivenCodeReviewResponse(**result)

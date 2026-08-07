@@ -66,6 +66,14 @@ class SummaryReview(BaseModel):
     weaknesses: str = ""
     recommendations: str = ""
 
+class ExecutionMetrics(BaseModel):
+    request_duration_seconds: float = 0.0
+    lang_detection_duration_seconds: float = 0.0
+    code_eval_duration_seconds: float = 0.0
+    total_requests_processed: int = 0
+    running_average_duration_seconds: float = 0.0
+
 class PromptDrivenCodeReviewResponse(BaseModel):
     individual_reviews: List[IndividualReview] = Field(default_factory=list)
     summary_review: Optional[Union[SummaryReview, str]] = None
+    execution_metrics: Optional[ExecutionMetrics] = None

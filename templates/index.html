@@ -528,10 +528,22 @@
             animation: appleCascade 0.7s var(--apple-spring) forwards;
         }
 
-        .response-card-block:nth-child(1) { animation-delay: 0.1s; }
-        .response-card-block:nth-child(2) { animation-delay: 0.2s; }
-        .response-card-block:nth-child(3) { animation-delay: 0.3s; }
-        .response-card-block:nth-child(4) { animation-delay: 0.4s; }
+        .response-card-block:nth-child(1) {
+            animation-delay: 0.1s;
+        }
+
+        .response-card-block:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .response-card-block:nth-child(3) {
+            animation-delay: 0.3s;
+        }
+
+        .response-card-block:nth-child(4) {
+            animation-delay: 0.4s;
+        }
+
         .response-card-block:nth-child(5) {
             animation-delay: 0.5s;
             grid-column: span 2;
@@ -570,12 +582,29 @@
             gap: 8px;
         }
 
-        .block-tag.feedback { color: var(--accent-blue); }
-        .block-tag.err { color: var(--accent-red); }
-        .block-tag.str { color: var(--accent-green); }
-        .block-tag.weak { color: var(--accent-amber); }
-        .block-tag.rec { color: var(--accent-purple); }
-        .block-tag.code { color: var(--accent-cyan); }
+        .block-tag.feedback {
+            color: var(--accent-blue);
+        }
+
+        .block-tag.err {
+            color: var(--accent-red);
+        }
+
+        .block-tag.str {
+            color: var(--accent-green);
+        }
+
+        .block-tag.weak {
+            color: var(--accent-amber);
+        }
+
+        .block-tag.rec {
+            color: var(--accent-purple);
+        }
+
+        .block-tag.code {
+            color: var(--accent-cyan);
+        }
 
         .block-expand-icon {
             font-size: 14px;
@@ -883,7 +912,8 @@
                 </div>
 
                 <div id="reportContent" style="display: none;">
-                    <div id="mismatchBanner" style="display:none; background: rgba(255, 149, 0, 0.15); border: 1px solid var(--accent-amber); color: var(--accent-amber); padding: 14px 20px; border-radius: 16px; margin-bottom: 20px; font-size: 13.5px; font-weight: 600; box-shadow: 0 4px 16px rgba(255, 149, 0, 0.15);">
+                    <div id="mismatchBanner"
+                        style="display:none; background: rgba(255, 149, 0, 0.15); border: 1px solid var(--accent-amber); color: var(--accent-amber); padding: 14px 20px; border-radius: 16px; margin-bottom: 20px; font-size: 13.5px; font-weight: 600; box-shadow: 0 4px 16px rgba(255, 149, 0, 0.15);">
                         <span id="mismatchText">⚠️ Language Mismatch Detected</span>
                     </div>
 
@@ -999,7 +1029,8 @@
             </div>
             <div id="modalBody" class="modal-body"></div>
             <div class="modal-footer">
-                <button type="button" class="btn-modal-copy" id="modalCopyBtn" onclick="copyModalContent()">Copy Details</button>
+                <button type="button" class="btn-modal-copy" id="modalCopyBtn" onclick="copyModalContent()">Copy
+                    Details</button>
             </div>
         </div>
     </div>
