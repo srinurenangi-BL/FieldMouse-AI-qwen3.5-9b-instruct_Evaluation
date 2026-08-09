@@ -40,10 +40,7 @@ def build_evaluation_prompt(
     target_language: str = DEFAULT_TARGET_LANGUAGE,
     ques_ans_content_with_inst: str = "",
     summary_gen_flag: bool = False,
-    language: Optional[str] = None
 ) -> str:
-    if language:
-        target_language = language
 
     INDIVIDUAL_PART = f"""
             The submitted programming language is:

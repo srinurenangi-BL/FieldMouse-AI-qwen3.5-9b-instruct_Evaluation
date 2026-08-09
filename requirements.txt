@@ -3,5 +3,3 @@ uvicorn[standard]
 ollama
 pydantic
 python-dotenv
-python-multipart
-jinja2

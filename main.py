@@ -48,13 +48,15 @@ METRICS_STATS = {
     "total_requests": 0,
     "total_duration": 0.0
 }
+metrics_lock = asyncio.Lock()
 
 
-def record_metrics(req_duration: float):
-    METRICS_STATS["total_requests"] += 1
-    METRICS_STATS["total_duration"] += req_duration
-    avg = METRICS_STATS["total_duration"] / METRICS_STATS["total_requests"]
-    return METRICS_STATS["total_requests"], round(avg, 2)
+async def record_metrics(req_duration: float):
+    async with metrics_lock:
+        METRICS_STATS["total_requests"] += 1
+        METRICS_STATS["total_duration"] += req_duration
+        avg = METRICS_STATS["total_duration"] / METRICS_STATS["total_requests"]
+        return METRICS_STATS["total_requests"], round(avg, 2)
 
 
 class LLMClientError(Exception):
@@ -70,7 +72,7 @@ async def send_prompt(prompt_text: str = "", json_mode: bool = False) -> str:
             {"role": "user", "content": prompt_text},
         ],
         "options": options,
-        "keep_alive": 0,
+        "keep_alive": "5m",
     }
 
     if json_mode:
@@ -79,18 +81,28 @@ async def send_prompt(prompt_text: str = "", json_mode: bool = False) -> str:
     max_attempts = 2
     for attempt in range(1, max_attempts + 1):
         try:
-            response = await ollama_client.chat(**kwargs)
+            response = await asyncio.wait_for(
+                ollama_client.chat(**kwargs),
+                timeout=LLM_TIMEOUT_SECONDS
+            )
             content = response["message"]["content"]
             if content:
                 return content.strip()
             raise LLMClientError("LLM returned empty content.")
         except LLMClientError:
             raise
+        except asyncio.TimeoutError:
+            logger.error(f"[TIMEOUT] LLM call timed out after {LLM_TIMEOUT_SECONDS}s (attempt {attempt}/{max_attempts})")
+            if attempt < max_attempts:
+                await asyncio.sleep(1.0)
+                continue
+            raise LLMClientError(f"Request timed out after {LLM_TIMEOUT_SECONDS} seconds.")
         except Exception as e:
             if attempt < max_attempts:
                 await asyncio.sleep(1.0)
                 continue
             raise LLMClientError(f"Failed after {max_attempts} attempts: {e}")
+    raise LLMClientError("LLM call failed after all attempts.")
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -140,10 +152,14 @@ async def review_code(request: CodeReviewRequest):
         target_clean = request.target_language.strip().lower()
         detected_clean = detected_lang.lower()
 
-        if detected_clean == target_clean or (detected_clean and detected_clean in target_clean) or (target_clean and target_clean in detected_clean):
+        if detected_clean == target_clean:
+            is_mismatch = False
+        elif raw_match is False or str(raw_match).lower() == "false":
+            is_mismatch = True
+        elif raw_match is True or str(raw_match).lower() == "true":
             is_mismatch = False
         else:
-            is_mismatch = not raw_match if isinstance(raw_match, bool) else (str(raw_match).lower() == "false")
+            is_mismatch = (detected_clean != target_clean)
 
         if is_mismatch:
             logger.warning(f"[LANGUAGE MISMATCH] Expected '{request.target_language}', but detected '{detected_lang}'. Assigning 0.0 scores and returning explanation.")
@@ -180,7 +196,7 @@ async def review_code(request: CodeReviewRequest):
         )
 
         total_duration = time.perf_counter() - req_start_time
-        total_reqs, running_avg = record_metrics(total_duration)
+        total_reqs, running_avg = await record_metrics(total_duration)
 
         metrics = ExecutionMetrics(
             request_duration_seconds=round(total_duration, 2),
@@ -227,7 +243,7 @@ async def review_code(request: CodeReviewRequest):
 
     total_duration = time.perf_counter() - req_start_time
     total_llm_time = lang_duration + eval_duration
-    total_reqs, running_avg = record_metrics(total_duration)
+    total_reqs, running_avg = await record_metrics(total_duration)
 
     metrics = ExecutionMetrics(
         request_duration_seconds=round(total_duration, 2),
