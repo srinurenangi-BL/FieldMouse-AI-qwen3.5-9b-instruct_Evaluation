@@ -38,147 +38,115 @@ Rules:
 
 def build_evaluation_prompt(
     target_language: str = DEFAULT_TARGET_LANGUAGE,
-    ques_ans_content_with_inst: str = "",
-    summary_gen_flag: bool = False,
+    question_text: str = "",
+    student_code: str = "",
+    specific_instructions: Optional[str] = None,
+    summary_gen_flag: bool = True,
 ) -> str:
+    instructions_text = (
+        specific_instructions.strip()
+        if specific_instructions and specific_instructions.strip()
+        else "None specified (follow standard industry best practices for the question)."
+    )
 
-    INDIVIDUAL_PART = f"""
-            The submitted programming language is:
+    INDIVIDUAL_PART = f"""The expected programming language is: {target_language}
 
-            {target_language}
+### 1. QUESTION STATEMENT:
+{question_text}
 
-            Below are the question-answer pairs submitted by the user.
+### 2. MANDATORY SPECIFIC INSTRUCTIONS & CONSTRAINTS:
+{instructions_text}
 
-            Each item may optionally contain SPECIFIC INSTRUCTIONS.
-            These instructions represent additional constraints,
-            expected approaches, edge cases, evaluation criteria,
-            or implementation requirements for that particular question.
+### 3. STUDENT SUBMITTED CODE:
+{student_code}
 
-            While evaluating each answer:
-            - Carefully follow the SPECIFIC INSTRUCTIONS if present
-            - Evaluate whether the submitted answer satisfies them
-            - Include violations or missed requirements in the feedback
+Instructions for Evaluation:
+1. LANGUAGE VERIFICATION:
+- If submitted code is NOT written in {target_language}:
+  - Assign 0.0 to all scores.
+  - Set correctness_feedback to: "⚠️ Language Mismatch: Submitted code was detected as [detected_language], but expected {target_language}. Evaluation skipped and 0.0 score assigned."
+  - In summary_review, set overall_average_score: 0.0, overall_quality_label: "Critical", common_errors: "⚠️ Language Mismatch", strengths: "None", weaknesses: "Code written in another language", recommendations: "Please rewrite and submit in {target_language}."
 
-            Submitted Question–Answer Data:
+2. IN-DEPTH EVALUATION & MANDATORY INSTRUCTION COMPLIANCE (If language matches {target_language}):
+- MANDATORY INSTRUCTIONS ARE STRICT REQUIREMENTS: Verify full adherence to the 'MANDATORY SPECIFIC INSTRUCTIONS & CONSTRAINTS' listed above.
+  - If any constraint or instruction is violated or ignored (e.g. required data structure, algorithm approach, prohibited operator, or edge-case handling):
+    - Heavily penalize completeness_score and approach_taken_score.
+    - Explicitly state the missed constraint / rule violation in correctness_feedback and weaknesses.
+- Check functional correctness, bugs, logic flaws, time/space efficiency, readability, and syntax.
+- Merge correctness assessment AND improvement suggestions into correctness_feedback as exactly 2 sentences:
+  - Sentence 1: assess correctness and mandatory instruction compliance.
+  - Sentence 2: provide a genuine improvement suggestion, or confirm the code is optimal. Do NOT invent unnecessary suggestions.
+- Do NOT output improvement_suggestions as a separate key.
 
-            {ques_ans_content_with_inst}
+Scoring (ALL SCORES MUST BE OUT OF 10):
+- completeness_score (0.0–10.0): degree to which problem requirements and all mandatory instructions are satisfied.
+- code_quality_score (0.0–10.0): syntax, naming, formatting, structure, and clean coding standards.
+- approach_taken_score (0.0–10.0): algorithm design, efficiency, and compliance with the requested approach.
+- overall_score formula:
+  overall_score = (0.5 * completeness_score) + (0.3 * code_quality_score) + (0.2 * approach_taken_score)"""
 
-            Tasks:
+    SUMMARY_PART = """
 
-            ------------------------------------------------------------
-            1. REVIEW EACH QUESTION–ANSWER INDIVIDUALLY
-            ------------------------------------------------------------
+------------------------------------------------------------
+SUMMARY REVIEW
+------------------------------------------------------------
+Provide:
+- overall_quality_label (9–10: Excellent, 7.5–8.9: Good, 6–7.4: Average, 4–5.9: Poor, below 4: Critical)
+- common_errors: key errors or constraint violations found
+- strengths: highlights of good practices and compliance
+- weaknesses: bugs, missed constraints, or unhandled edge cases
+- recommendations: clear steps for optimization or correction"""
 
-            For each item:
+    SCORE_PART = """
 
-            - Analyze correctness
-            - Identify bugs
-            - Evaluate readability
-            - Evaluate efficiency
-            - Validate adherence to SPECIFIC INSTRUCTIONS (if present)
-            - Merge correctness assessment AND improvement suggestions into
-              correctness_feedback as exactly 2 sentences.
-              Sentence 1: assess correctness.
-              Sentence 2: a genuine improvement if one exists, or confirm the
-              code is optimal. Do not invent suggestions.
-            - Do NOT output improvement_suggestions as a separate key.
+------------------------------------------------------------
+OUTPUT FORMAT
+------------------------------------------------------------
+Output ONLY the following JSON object directly starting with '{'. Do NOT write 'Thinking Process:', preamble, or markdown notes outside the JSON:
+{
+    "individual_reviews": [
+        {
+            "question_text": "",
+            "correctness_feedback": "",
+            "scores": {
+                "completeness_score": 0.0,
+                "code_quality_score": 0.0,
+                "approach_taken_score": 0.0,
+                "overall_score": 0.0
+            }
+        }
+    ],
+    "summary_review": {
+        "overall_average_score": 0.0,
+        "overall_quality_label": "",
+        "common_errors": "",
+        "strengths": "",
+        "weaknesses": "",
+        "recommendations": ""
+    }
+}"""
 
-            Scoring (ALL SCORES MUST BE OUT OF 10):
-            - completeness_score
-            - code_quality_score
-            - approach_taken_score
-            - overall_score
+    SCORE_WITHOUT_SUMM_PART = """
 
-            overall_score formula:
-            (0.5 * completeness_score)
-            + (0.3 * code_quality_score)
-            + (0.2 * approach_taken_score)"""
-
-    SUMMARY_PART = """------------------------------------------------------------
-        2. SUMMARY REVIEW
-        ------------------------------------------------------------
-
-        Provide:
-        - overall_quality_label
-        - common mistakes
-        - strengths
-        - weaknesses
-        - recommendations
-
-        overall_quality_label mapping:
-        - 9–10 → Excellent
-        - 7.5–8.9 → Good
-        - 6–7.4 → Average
-        - 4–5.9 → Poor
-        - below 4 → Critical"""
-
-    SCORE_PART = """------------------------------------------------------------
-        3. OUTPUT FORMAT
-        ------------------------------------------------------------
-
-        Return this exact JSON schema:
-
-        {{
-            "individual_reviews": [
-                {{
-                    "question_text": "",
-                    "correctness_feedback": "",
-                    "scores": {{
-                        "completeness_score":0.0,
-                        "code_quality_score": 0.0,
-                        "approach_taken_score": 0.0,
-                        "overall_score": 0.0
-                    }}
-                }}
-            ],
-            "summary_review": {{
-                "overall_average_score": 0.0,
-                "overall_quality_label": "",
-                "common_errors": "",
-                "strengths": "",
-                "weaknesses": "",
-                "recommendations": ""
-            }}
-        }}
-
-        Rules:
-        - All scores must be between 0 and 10
-        - Output ONLY valid JSON
-        - Do not include markdown
-        - Do not include explanations outside JSON
-        - Base analysis strictly on the submitted code
-        """
-
-    SCORE_WITHOUT_SUMM_PART = """------------------------------------------------------------
-        3. OUTPUT FORMAT
-        ------------------------------------------------------------
-
-        Return this exact JSON schema:
-
-        {{
-            "individual_reviews": [
-                {{
-                    "question_text": "",
-                    "correctness_feedback": "",
-                    "scores": {{
-                        "completeness_score":0.0,
-                        "code_quality_score": 0.0,
-                        "approach_taken_score": 0.0,
-                        "overall_score": 0.0
-                    }}
-                }}
-            ],
-            "summary_review":"None"
-        }}
-
-        Rules:
-        - All scores must be between 0 and 10
-        - Output ONLY valid JSON
-        - Do not include markdown
-        - Do not include explanations outside JSON
-        - Do not include improvement_suggestions in the output
-        - Base analysis strictly on the submitted code
-        """
+------------------------------------------------------------
+OUTPUT FORMAT
+------------------------------------------------------------
+Output ONLY the following JSON object directly starting with '{'. Do NOT write 'Thinking Process:', preamble, or markdown notes outside the JSON:
+{
+    "individual_reviews": [
+        {
+            "question_text": "",
+            "correctness_feedback": "",
+            "scores": {
+                "completeness_score": 0.0,
+                "code_quality_score": 0.0,
+                "approach_taken_score": 0.0,
+                "overall_score": 0.0
+            }
+        }
+    ],
+    "summary_review": "None"
+}"""
 
     if summary_gen_flag:
         return INDIVIDUAL_PART + SUMMARY_PART + SCORE_PART

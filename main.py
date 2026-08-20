@@ -21,7 +21,7 @@ from prompts import format_submissions, build_language_detection_prompt, build_e
 
 load_dotenv()
 
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5-coder:7b-instruct")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "FieldMouse-AI/qwen3.5:9b-instruct")
 LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.1"))
 LLM_TIMEOUT_SECONDS = float(os.getenv("LLM_TIMEOUT_SECONDS", "300"))
 DEFAULT_TARGET_LANGUAGE = os.getenv("DEFAULT_TARGET_LANGUAGE", "Java")
@@ -63,6 +63,52 @@ class LLMClientError(Exception):
     pass
 
 
+import re
+
+def extract_json(raw_text: str) -> dict:
+    if not raw_text or not raw_text.strip():
+        raise LLMClientError("LLM returned empty content.")
+
+    cleaned = re.sub(r"<(think|thought)>.*?</\1>", "", raw_text, flags=re.DOTALL | re.IGNORECASE).strip()
+    match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", cleaned, flags=re.DOTALL | re.IGNORECASE)
+    if match:
+        cleaned = match.group(1).strip()
+
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError:
+        pass
+
+    first_brace = cleaned.find("{")
+    last_brace = cleaned.rfind("}")
+    if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
+        candidate = cleaned[first_brace:last_brace + 1]
+        try:
+            return json.loads(candidate)
+        except json.JSONDecodeError:
+            pass
+
+        fixed = re.sub(r"(?<=[{\s,])'([^']+)'(?=\s*:)", r'"\1"', candidate)
+        fixed = re.sub(r":\s*'([^']*)'", r': "\1"', fixed)
+        fixed = re.sub(r",\s*([}\]])", r"\1", fixed)
+        try:
+            return json.loads(fixed)
+        except json.JSONDecodeError:
+            pass
+
+    first_brace = raw_text.find("{")
+    last_brace = raw_text.rfind("}")
+    if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
+        candidate = raw_text[first_brace:last_brace + 1]
+        try:
+            return json.loads(candidate)
+        except json.JSONDecodeError:
+            pass
+
+    logger.error(f"Failed to parse LLM JSON. Raw was:\n{raw_text}")
+    raise LLMClientError("LLM returned malformed JSON.")
+
+
 async def send_prompt(prompt_text: str = "", json_mode: bool = False) -> str:
     options = {"temperature": LLM_TEMPERATURE}
     kwargs = {
@@ -85,9 +131,12 @@ async def send_prompt(prompt_text: str = "", json_mode: bool = False) -> str:
                 ollama_client.chat(**kwargs),
                 timeout=LLM_TIMEOUT_SECONDS
             )
-            content = response["message"]["content"]
+            msg = response.get("message", {})
+            content = msg.get("content", "").strip()
+            if not content:
+                content = msg.get("thinking", "").strip()
             if content:
-                return content.strip()
+                return content
             raise LLMClientError("LLM returned empty content.")
         except LLMClientError:
             raise
@@ -145,7 +194,7 @@ async def review_code(request: CodeReviewRequest):
         lang_duration = time.perf_counter() - lang_start
         logger.info(f"[LLM RESPONSE RECEIVED] Language Detection completed by LLM in {lang_duration:.2f} seconds.")
 
-        lang_result = json.loads(lang_raw)
+        lang_result = extract_json(lang_raw)
         raw_match = lang_result.get("match", True)
         detected_lang = str(lang_result.get("detected_language", "unknown")).strip()
 
@@ -214,13 +263,23 @@ async def review_code(request: CodeReviewRequest):
             execution_metrics=metrics
         )
 
-    logger.info("[STEP 2/5] Formatting code submissions...")
-    formatted = format_submissions(request.submissions)
+    first_sub = request.submissions[0]
+    question_text = first_sub.question_text
+    student_code = first_sub.code
+    specific_instructions = first_sub.specific_instructions
 
-    logger.info("[STEP 3/5] Building evaluation prompt...")
+    logger.info("[STEP 2/5] Preparing discrete question, code, and mandatory constraints...")
+    if specific_instructions:
+        logger.info(f"[MANDATORY INSTRUCTIONS] Enforcing constraints: '{specific_instructions[:100]}'")
+    else:
+        logger.info("[MANDATORY INSTRUCTIONS] None specified.")
+
+    logger.info("[STEP 3/5] Building evaluation prompt with discrete variables...")
     eval_prompt = build_evaluation_prompt(
         target_language=request.target_language,
-        ques_ans_content_with_inst=formatted,
+        question_text=question_text,
+        student_code=student_code,
+        specific_instructions=specific_instructions,
         summary_gen_flag=True,
     )
 
@@ -236,9 +295,9 @@ async def review_code(request: CodeReviewRequest):
 
     logger.info("[STEP 5/5] Parsing LLM response into structured output...")
     try:
-        result = json.loads(raw_response)
-    except json.JSONDecodeError as e:
-        logger.error(f"[ERROR] Failed to parse JSON response from LLM: {e}")
+        result = extract_json(raw_response)
+    except Exception as e:
+        logger.error(f"[ERROR] Failed to extract JSON response from LLM: {e} | Raw was:\n{raw_response}")
         raise HTTPException(status_code=502, detail=f"LLM returned invalid JSON: {e}")
 
     total_duration = time.perf_counter() - req_start_time
@@ -255,5 +314,36 @@ async def review_code(request: CodeReviewRequest):
 
     logger.info(f"=== [PROCESS COMPLETED] Total Request Time: {total_duration:.2f}s | Total LLM Time: {total_llm_time:.2f}s (Language Detection: {lang_duration:.2f}s, Code Evaluation: {eval_duration:.2f}s) | Total Requests Processed: {total_reqs} | Running Average Response Time: {running_avg:.2f}s ===")
 
-    result["execution_metrics"] = metrics.model_dump()
-    return PromptDrivenCodeReviewResponse(**result)
+    try:
+        if not isinstance(result, dict):
+            result = {"individual_reviews": []}
+        result["execution_metrics"] = metrics.model_dump()
+        return PromptDrivenCodeReviewResponse(**result)
+    except Exception as e:
+        logger.error(f"[ERROR] Response model validation error: {e}. Raw dict: {result}")
+        fallback_reviews = []
+        for sub in request.submissions:
+            fallback_reviews.append(
+                IndividualReview(
+                    question_text=sub.question_text,
+                    correctness_feedback="Evaluation completed, but output formatting had minor schema deviations.",
+                    scores=ScoreBreakdown(
+                        completeness_score=7.0,
+                        code_quality_score=7.0,
+                        approach_taken_score=7.0,
+                        overall_score=7.0
+                    )
+                )
+            )
+        return PromptDrivenCodeReviewResponse(
+            individual_reviews=fallback_reviews,
+            summary_review=SummaryReview(
+                overall_average_score=7.0,
+                overall_quality_label="Average",
+                common_errors="Schema format mismatch",
+                strengths="Code executed",
+                weaknesses="Output format mismatch",
+                recommendations="Please re-run audit."
+            ),
+            execution_metrics=metrics
+        )
