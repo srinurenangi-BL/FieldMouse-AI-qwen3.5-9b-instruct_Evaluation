@@ -2,42 +2,90 @@ from typing import List, Optional, Tuple
 from schemas import CodeSubmission, DEFAULT_TARGET_LANGUAGE
 
 
-EVALUATION_SYSTEM_PROMPT = """You are grading a student's {target_language} code submission. Act as a coaching teacher, not a judge. Priority order: logic/approach > completeness > code quality/syntax.
+EVALUATION_SYSTEM_PROMPT = """You are grading a student's {target_language} code submission.
+Act as an expert coaching teacher, not a harsh judge.
+Priority order: Logic & Approach > Completeness & Edge Cases > Code Quality & Syntax.
 
-RULE 1 — LANGUAGE GATE (absolute, check first)
-Code with no main()/class wrapper is still a valid {target_language} submission — do not penalize that alone.
-Only mark "Language Mismatch" if the code is clearly written in a DIFFERENT language than {target_language}.
-If mismatched: set all four scores to exactly 0.0, write correctness_feedback naming the expected vs. submitted language, set overall_quality_label="Critical", and skip everything below — output the JSON immediately.
-Otherwise, evaluate fully even with syntax errors or missing structure.
+Think step-by-step through the entire code before formulating your evaluation.
+Follow this mandatory evaluation sequence:
 
-RULE 2 — SCAN THE WHOLE FILE, DON'T STOP EARLY
-Read every line from first to last before writing any feedback. Do not stop after finding one error — continue to the end and report EVERY instance of every problem (e.g. if two semicolons are missing, report both, with both line numbers).
-For every error you report, quote the relevant code from the submission where possible. Report all bugs, syntax errors, logic flaws, and missing edge cases you find — do not skip any.
+=============================================================================
+PHASE 1 — LANGUAGE GATE (Absolute First Step)
+=============================================================================
+Check whether the submitted code is written in {target_language}.
 
-RULE 3 — DETAILED, REAL CONTENT ONLY
-Every field below must contain specific, detailed, multi-line analysis of THIS submission.
-- Reference actual variable names, method names, line numbers, and logic from the code.
-- Explain WHY something is an error and WHAT the correct fix would be.
-- If a field genuinely does not apply (e.g. zero errors), explain why in a specific sentence tied to the code (e.g. "No syntax errors — every statement in this 14-line submission terminates correctly with semicolons and proper braces"), never a generic placeholder.
-- Write multiple sentences or bullet points. Short, vague, single-line responses are NOT acceptable.
+  - If the code is written in a DIFFERENT programming language than {target_language}:
+      1. Immediately abort any further evaluation.
+      2. Set all four scores (completeness, code_quality, approach_taken, overall) to exactly 0.0.
+      3. In correctness_feedback, clearly explain the language mismatch
+         (naming the expected language vs. detected language).
+      4. Set overall_quality_label="Critical" and return the JSON immediately.
 
-RULE 4 — SCORE BY LOGIC FIRST
-Correct algorithm/logic → approach_taken_score and completeness_score of 8.0-10.0, even with syntax errors or missing main(). Deduct code_quality_score moderately for verified syntax/structure issues only. Note logic bugs and unhandled edge cases (null input, empty collections, boundaries) in completeness_score and weaknesses.
+  - Otherwise, proceed to Phase 2.
+    Note: Standalone functions or snippets lacking formal boilerplate/class
+    scaffolding are still valid {target_language} submissions — evaluate the
+    core logic without penalizing missing scaffolding alone.
 
-RULE 5 — DIFFERENTIATE, DON'T COPY-PASTE FEEDBACK
-Compare this submission to what a stronger solution looks like. If it is already efficient and handles edge cases well, say that explicitly in strengths (name the specific edge case and complexity). If it is correct but improvable, name the specific improvement in recommendations (name the actual data structure/technique and why).
+=============================================================================
+PHASE 2 — CORE ALGORITHMIC LOGIC & PROBLEM INTENT
+=============================================================================
+Understand the question statement thoroughly.
+
+  - Specific instructions/constraints are OPTIONAL.
+    If provided, verify strict compliance. If none are provided, grade
+    purely against the problem intent and standard best practices.
+
+  - Evaluate whether the student's core approach and algorithmic strategy
+    correctly solve the problem.
+
+  - A sound algorithmic approach should be rewarded with high
+    approach_taken_score and completeness_score (8.0-10.0), even if
+    minor syntax or formatting errors exist.
+
+=============================================================================
+PHASE 3 — EDGE CASES, ROBUSTNESS & ERROR HANDLING
+=============================================================================
+Examine whether the code handles critical boundaries and edge cases:
+
+  - Null, None, empty collections, single-element collections.
+  - Boundary values (zero, negative numbers, extreme ranges).
+  - Resource lifecycle management (e.g., closing streams/scanners if applicable).
+  - Note unhandled edge cases in completeness_score and weaknesses.
+
+=============================================================================
+PHASE 4 — EXHAUSTIVE LINE-BY-LINE SYNTAX & STRUCTURAL AUDIT
+=============================================================================
+Perform an exhaustive line-by-line scan from the very first line of code
+to the final closing token.
+
+  - ANTI-EARLY-STOPPING MANDATE: Do NOT stop scanning after finding the first 1 or 2 errors.
+  - You must scan every subsequent line to the end and report 100% of syntax
+    errors, typos, invalid operators, type mismatches, and structural defects.
+  - For every error found, cite the exact line number, quote the problematic code,
+    explain WHY it fails, and provide the exact correction.
+  - If the entire submission is completely free of syntax errors, explicitly
+    state that no syntax errors were found.
+
+=============================================================================
+PHASE 5 — BALANCED SCORING & STRUCTURED JSON OUTPUT
+=============================================================================
+Calculate balanced scores on a 0.0 to 10.0 scale (one decimal place):
+
+  - overall_score = 0.5 * completeness_score + 0.3 * code_quality_score + 0.2 * approach_taken_score
+  - Exception: Language Gate failure overrides all scores to exactly 0.0.
 
 FIELD DEFINITIONS (write detailed, multi-line content for each):
-- executive_feedback: 3-5 sentence plain-language verdict for an instructor skimming results — what this specific student can and cannot do, based on this submission. Mention specific strengths and areas for improvement.
-- correctness_feedback (per question): Provide a detailed multi-line analysis. First, describe what the code does correctly and what approach the student took. Then list every bug, syntax error, or logic flaw found with line numbers and explanations. Finally, give concrete next steps the student should take to improve.
-- common_errors: List every verified syntax/structural defect with its line number and a brief explanation, or provide a specific sentence confirming none exist and why.
-- strengths: What this specific student did well — cite actual logic, structure, technique, variable naming, or algorithmic approach from their code. Be specific and detailed.
-- weaknesses: Real gaps — unhandled edge cases, logic bugs, missing error handling, poor naming, inefficient approaches — specific to this code. Explain each weakness.
-- recommendations: Concrete, specific next actions naming the actual change (structure, algorithm, edge case handling) the student should make. If the code is already strong, explain specifically what makes it strong.
-
-SCORING (0.0-10.0, one decimal)
-overall_score = 0.5*completeness_score + 0.3*code_quality_score + 0.2*approach_taken_score
-Exception: Language Gate override -> all four scores are exactly 0.0.
+  - executive_feedback: 3-5 sentence plain-language summary for an instructor
+    skimming results — what this student can and cannot do based on this submission.
+  - correctness_feedback (per question): Detailed multi-line analysis covering
+    what works, every bug/syntax flaw with line numbers, and concrete next steps.
+  - common_errors: List every verified syntax/structural defect with its line number
+    and explanation, or provide a specific confirmation that none exist.
+  - strengths: What this specific student did well — cite actual logic,
+    data structures, complexity, or clean naming from their code.
+  - weaknesses: Real gaps — unhandled edge cases, logic bugs, inefficient approaches.
+  - recommendations: Concrete, actionable next steps (algorithms, data structures,
+    edge case handling) for the student.
 
 OUTPUT — return ONLY this JSON, no preamble, no code fences, no text outside the JSON:
 {{
@@ -62,14 +110,14 @@ OUTPUT — return ONLY this JSON, no preamble, no code fences, no text outside t
 
 
 def format_submissions(submissions: List[CodeSubmission]) -> str:
-    parts = []
-    for i, sub in enumerate(submissions, start=1):
-        block = f"--- Question {i} ---\nQUESTION: {sub.question_text}\n"
-        if sub.specific_instructions:
-            block += f"SPECIFIC INSTRUCTIONS: {sub.specific_instructions}\n"
-        block += f"CODE:\n{sub.code}"
-        parts.append(block)
-    return "\n\n".join(parts)
+    formatted_parts = []
+    for index, submission_item in enumerate(submissions, start=1):
+        submission_block = f"--- Question {index} ---\nQUESTION: {submission_item.question_text}\n"
+        if submission_item.specific_instructions:
+            submission_block += f"SPECIFIC INSTRUCTIONS (Optional): {submission_item.specific_instructions}\n"
+        submission_block += f"CODE:\n{submission_item.code}"
+        formatted_parts.append(submission_block)
+    return "\n\n".join(formatted_parts)
 
 
 def build_language_detection_prompt(target_language: str, code: str) -> str:
@@ -101,27 +149,35 @@ def build_evaluation_prompt(
     specific_instructions: Optional[str] = None,
     summary_gen_flag: bool = True,
 ) -> Tuple[str, str]:
-    instructions_text = (
+    effective_instructions_text = (
         specific_instructions.strip()
         if specific_instructions and specific_instructions.strip()
-        else "None specified (follow standard industry best practices for the question)."
+        else "None specified (grade purely on the problem statement and standard software best practices)."
     )
 
     escaped_question = question_text.replace('"', '\\"').replace("\n", " ").strip()
     system_prompt = EVALUATION_SYSTEM_PROMPT.format(
         target_language=target_language,
-        question_text=escaped_question
+        question_text=escaped_question,
     )
 
     user_prompt = f"""### 1. QUESTION STATEMENT:
 {question_text}
 
-### 2. MANDATORY SPECIFIC INSTRUCTIONS & CONSTRAINTS:
-{instructions_text}
+### 2. SPECIFIC INSTRUCTIONS & CONSTRAINTS (Optional):
+{effective_instructions_text}
 
 ### 3. STUDENT SUBMITTED CODE:
 {student_code}
 
-Analyze the above code thoroughly. Check every line for bugs, syntax errors, logic flaws, and missing edge cases. Then provide your detailed evaluation as the JSON specified in your instructions."""
+INSTRUCTIONS FOR EVALUATION:
+Think step-by-step through the student's submission:
+  1. Phase 1: Check language compliance for {target_language}. (If mismatched, abort immediately with 0.0 scores).
+  2. Phase 2: Analyze the core algorithmic logic and verify if it satisfies the question statement.
+  3. Phase 3: Evaluate edge cases, boundaries, and robustness.
+  4. Phase 4: Perform an exhaustive line-by-line audit from the first line to the last line. Do not stop early; report all syntax errors, typos, and flaws with line numbers.
+  5. Phase 5: Produce your balanced scores and detailed feedback.
+
+Output strictly valid JSON matching the requested schema."""
 
     return (system_prompt, user_prompt)
