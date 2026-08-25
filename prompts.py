@@ -175,7 +175,7 @@ Think step-by-step through the student's submission:
   1. Phase 1: Check language compliance for {target_language}. (If mismatched, abort immediately with 0.0 scores).
   2. Phase 2: Analyze the core algorithmic logic and verify if it satisfies the question statement.
   3. Phase 3: Evaluate edge cases, boundaries, and robustness.
-  4. Phase 4: Perform an exhaustive line-by-line audit from the first line to the last line. Do not stop early; report all syntax errors, typos, and flaws with line numbers.
+  4. Phase 4: Perform an exhaustive line-by-line audit from the first line to the last line. Quote the exact verbatim line of code for any error reported. Do NOT report errors for lines that are already correctly written or fixed in this code.
   5. Phase 5: Produce your balanced scores and detailed feedback.
 
 Output strictly valid JSON matching the requested schema."""
