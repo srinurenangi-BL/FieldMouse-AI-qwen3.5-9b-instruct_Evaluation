@@ -57,6 +57,11 @@ def build_evaluation_prompt(
     escaped_question = question_text.replace('"', '\\"').replace("\n", " ").strip()
     system_prompt = EVALUATION_SYSTEM_PROMPT
 
+    numbered_code_lines = [
+        f"Line {idx}: {line}" for idx, line in enumerate(student_code.splitlines(), start=1)
+    ]
+    formatted_numbered_code = "\n".join(numbered_code_lines) if numbered_code_lines else student_code
+
     user_prompt = f"""### 1. TARGET PROGRAMMING LANGUAGE:
 {target_language}
 
@@ -66,8 +71,8 @@ def build_evaluation_prompt(
 ### 3. SPECIFIC INSTRUCTIONS & CONSTRAINTS (Optional):
 {effective_instructions_text}
 
-### 4. STUDENT SUBMITTED CODE:
-{student_code}
+### 4. STUDENT SUBMITTED CODE (with line numbers):
+{formatted_numbered_code}
 
 =============================================================================
 EVALUATION PIPELINE — MANDATORY STEP-BY-STEP PROCESS
@@ -102,16 +107,17 @@ Examine whether the code handles critical boundaries and edge cases:
 
 PHASE 4 — EXHAUSTIVE LINE-BY-LINE SYNTAX & STRUCTURAL AUDIT
 Perform an exhaustive line-by-line scan from the very first line to the final token.
+  - BRACE & SYNTAX VERIFICATION: Check literal braces '{' and '}' directly from the code above.
+    If opening and closing braces exist in the code, NEVER claim they are missing.
   - STRICT GROUNDING MANDATE: Grade ONLY what is literally written in the
-    STUDENT SUBMITTED CODE above. Never assume or hallucinate an error from previous
-    submissions or common mistake tropes.
-  - VERBATIM QUOTE REQUIREMENT: For every error reported, quote the EXACT
+    STUDENT SUBMITTED CODE above. Never invent, imagine, or hallucinate syntax errors.
+  - If the code compiles and has valid syntax: You MUST state in 'common_errors':
+    "None. The code has zero syntax errors." and award a high code_quality_score (9.0-10.0).
+  - VERBATIM QUOTE REQUIREMENT: For any real error reported, quote the EXACT
     verbatim line of code from the student's submission. If a line is already
     correctly written or fixed in this code, do NOT report it as an error.
   - ANTI-EARLY-STOPPING MANDATE: Do NOT stop scanning after finding the first 1 or 2 errors.
-    Scan every subsequent line to the end and report 100% of verified syntax errors,
-    typos, invalid operators, type mismatches, and structural defects with line numbers.
-  - If the submission is completely free of syntax errors, explicitly state that no syntax errors were found.
+    Scan every subsequent line to the end and report 100% of verified syntax errors with line numbers.
 
 PHASE 5 — BALANCED SCORING & STRUCTURED JSON OUTPUT
 Calculate balanced scores on a 0.0 to 10.0 scale (one decimal place):
