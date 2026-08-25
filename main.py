@@ -23,7 +23,7 @@ from schemas import (
 load_dotenv()
 
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "FieldMouse-AI/qwen3.5:9b-instruct")
-LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.1"))
+LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.2"))
 LLM_TIMEOUT_SECONDS = float(os.getenv("LLM_TIMEOUT_SECONDS", "300"))
 OLLAMA_KEEP_ALIVE = os.getenv("OLLAMA_KEEP_ALIVE", "2m")
 OLLAMA_NUM_CTX = int(os.getenv("OLLAMA_NUM_CTX", "8192"))
@@ -311,30 +311,9 @@ async def evaluate_code_submission(request: CodeReviewRequest):
             parsed_evaluation_dict = {"individual_reviews": []}
         parsed_evaluation_dict["execution_metrics"] = execution_metrics.model_dump()
         return PromptDrivenCodeReviewResponse(**parsed_evaluation_dict)
-    except Exception as validation_fallback_error:
-        logger.error(f"Response validation fallback: {validation_fallback_error}")
-        fallback_individual_reviews = [
-            IndividualReview(
-                question_text=submission_item.question_text,
-                correctness_feedback="Evaluation completed successfully.",
-                scores=ScoreBreakdown(
-                    completeness_score=7.0,
-                    code_quality_score=7.0,
-                    approach_taken_score=7.0,
-                    overall_score=7.0,
-                )
-            ) for submission_item in request.submissions
-        ]
-        return PromptDrivenCodeReviewResponse(
-            individual_reviews=fallback_individual_reviews,
-            summary_review=SummaryReview(
-                overall_average_score=7.0,
-                overall_quality_label="Average",
-                executive_feedback="Evaluation completed with fallback formatting.",
-                common_errors="None",
-                strengths="Code executed",
-                weaknesses="Formatting deviation",
-                recommendations="Review code standards."
-            ),
-            execution_metrics=execution_metrics,
+    except Exception as validation_error:
+        logger.error(f"Response validation error: {validation_error}")
+        raise HTTPException(
+            status_code=502,
+            detail=f"Evaluation response validation failed: {validation_error}"
         )
