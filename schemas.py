@@ -1,4 +1,5 @@
 import os
+import re
 from typing import Any, List, Optional, Union
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field, model_validator
@@ -6,66 +7,53 @@ from pydantic import BaseModel, Field, model_validator
 load_dotenv()
 DEFAULT_TARGET_LANGUAGE = os.getenv("DEFAULT_TARGET_LANGUAGE", "Java")
 
+
 class CodeSubmission(BaseModel):
-    question_text: str = Field(
-        ...,
-        description="The problem statement or question"
-    )
+    question_text: str = Field(..., description="The problem statement or question")
+    code: str = Field(..., description="The student's submitted source code")
+    specific_instructions: Optional[str] = Field(None, description="Optional extra constraints or approach guidelines")
 
-    code: str = Field(
-        ...,
-        description="The student's submitted source code"
-    )
 
-    specific_instructions: Optional[str] = Field(
-        None,
-        description="Optional extra constraints for this question"
-    )
 class CodeReviewRequest(BaseModel):
-    target_language: str = Field(
-        default = DEFAULT_TARGET_LANGUAGE,
-        description="Programming language of the submitted code"
-    )
-    submissions: List[CodeSubmission] = Field(
-        default_factory=list,
-        description="List of question + code submissions to evaluate"
-    )
+    target_language: str = Field(default=DEFAULT_TARGET_LANGUAGE, description="Target programming language")
+    submissions: List[CodeSubmission] = Field(default_factory=list, description="List of submissions to evaluate")
+
     @model_validator(mode="before")
     @classmethod
     def normalize_flat_payload(cls, data: Any) -> Any:
         if isinstance(data, dict) and not data.get("submissions"):
             question_text = data.get("question_text") or data.get("problem")
-            code = data.get("code")
-            instructions = data.get("specific_instructions") or data.get("instructions") or data.get("constraints")
-            if question_text and code:
+            submitted_code = data.get("code")
+            optional_constraints = data.get("specific_instructions") or data.get("instructions") or data.get("constraints")
+            if question_text and submitted_code:
                 data = dict(data)
                 data["submissions"] = [
                     {
                         "question_text": str(question_text),
-                        "code": str(code),
-                        "specific_instructions": str(instructions).strip() if instructions else None,
+                        "code": str(submitted_code),
+                        "specific_instructions": str(optional_constraints).strip() if optional_constraints else None,
                     }
                 ]
         return data
 
-import re
 
-def _clean_score(val: Any) -> float:
-    if val is None:
+def sanitize_numerical_score(raw_score_value: Any) -> float:
+    if raw_score_value is None:
         return 0.0
-    if isinstance(val, (int, float)):
-        score = float(val)
-        if score > 10.0 and score <= 100.0:
-            score = score / 10.0
-        return max(0.0, min(10.0, score))
-    val_str = str(val).strip()
-    match = re.search(r"(\d+(?:\.\d+)?)", val_str)
-    if match:
+    if isinstance(raw_score_value, (int, float)):
+        numeric_score = float(raw_score_value)
+        if 10.0 < numeric_score <= 100.0:
+            numeric_score = numeric_score / 10.0
+        return max(0.0, min(10.0, numeric_score))
+
+    score_text = str(raw_score_value).strip()
+    regex_match = re.search(r"(\d+(?:\.\d+)?)", score_text)
+    if regex_match:
         try:
-            score = float(match.group(1))
-            if "/100" in val_str or (score > 10.0 and score <= 100.0):
-                score = score / 10.0
-            return max(0.0, min(10.0, score))
+            parsed_score = float(regex_match.group(1))
+            if "/100" in score_text or (10.0 < parsed_score <= 100.0):
+                parsed_score = parsed_score / 10.0
+            return max(0.0, min(10.0, parsed_score))
         except (ValueError, TypeError):
             pass
     return 0.0
@@ -81,18 +69,18 @@ class ScoreBreakdown(BaseModel):
     @classmethod
     def normalize_scores(cls, data: Any) -> Any:
         if isinstance(data, dict):
-            comp = _clean_score(data.get("completeness_score", 0.0))
-            qual = _clean_score(data.get("code_quality_score", 0.0))
-            appr = _clean_score(data.get("approach_taken_score", 0.0))
+            completeness = sanitize_numerical_score(data.get("completeness_score", 0.0))
+            code_quality = sanitize_numerical_score(data.get("code_quality_score", 0.0))
+            approach_taken = sanitize_numerical_score(data.get("approach_taken_score", 0.0))
             overall = data.get("overall_score")
             if overall is None or overall == "" or str(overall).strip().lower() == "none":
-                overall = round((0.5 * comp) + (0.3 * qual) + (0.2 * appr), 2)
+                overall = round((0.5 * completeness) + (0.3 * code_quality) + (0.2 * approach_taken), 2)
             else:
-                overall = _clean_score(overall)
+                overall = sanitize_numerical_score(overall)
             return {
-                "completeness_score": comp,
-                "code_quality_score": qual,
-                "approach_taken_score": appr,
+                "completeness_score": completeness,
+                "code_quality_score": code_quality,
+                "approach_taken_score": approach_taken,
                 "overall_score": overall,
             }
         return data
@@ -107,15 +95,15 @@ class IndividualReview(BaseModel):
     @classmethod
     def normalize_review(cls, data: Any) -> Any:
         if isinstance(data, dict):
-            q_text = str(data.get("question_text") or data.get("question") or "")
-            feedback = str(data.get("correctness_feedback") or data.get("feedback") or "")
-            scores = data.get("scores")
-            if not isinstance(scores, dict):
-                scores = {}
+            question_text = str(data.get("question_text") or data.get("question") or "")
+            feedback_text = str(data.get("correctness_feedback") or data.get("feedback") or "")
+            scores_dict = data.get("scores")
+            if not isinstance(scores_dict, dict):
+                scores_dict = {}
             return {
-                "question_text": q_text,
-                "correctness_feedback": feedback,
-                "scores": scores,
+                "question_text": question_text,
+                "correctness_feedback": feedback_text,
+                "scores": scores_dict,
             }
         return data
 
@@ -123,6 +111,7 @@ class IndividualReview(BaseModel):
 class SummaryReview(BaseModel):
     overall_average_score: float = 0.0
     overall_quality_label: str = "Critical"
+    executive_feedback: Optional[str] = ""
     common_errors: str = ""
     strengths: str = ""
     weaknesses: str = ""
@@ -132,32 +121,28 @@ class SummaryReview(BaseModel):
     @classmethod
     def normalize_summary(cls, data: Any) -> Any:
         if isinstance(data, dict):
-            score = _clean_score(data.get("overall_average_score", 0.0))
-            label = str(data.get("overall_quality_label") or "")
-            if not label:
-                if score >= 9.0:
-                    label = "Excellent"
-                elif score >= 7.5:
-                    label = "Good"
-                elif score >= 6.0:
-                    label = "Average"
-                elif score >= 4.0:
-                    label = "Poor"
+            average_score = sanitize_numerical_score(data.get("overall_average_score", 0.0))
+            quality_label = str(data.get("overall_quality_label") or "").strip()
+            if not quality_label:
+                if average_score >= 9.0:
+                    quality_label = "Excellent"
+                elif average_score >= 7.5:
+                    quality_label = "Good"
+                elif average_score >= 6.0:
+                    quality_label = "Average"
+                elif average_score >= 4.0:
+                    quality_label = "Poor"
                 else:
-                    label = "Critical"
-
-            errors = str(data.get("common_errors") or data.get("common_mistakes") or data.get("mistakes") or "")
-            strengths = str(data.get("strengths") or "")
-            weaknesses = str(data.get("weaknesses") or "")
-            recs = str(data.get("recommendations") or "")
+                    quality_label = "Critical"
 
             return {
-                "overall_average_score": score,
-                "overall_quality_label": label,
-                "common_errors": errors,
-                "strengths": strengths,
-                "weaknesses": weaknesses,
-                "recommendations": recs,
+                "overall_average_score": average_score,
+                "overall_quality_label": quality_label,
+                "executive_feedback": str(data.get("executive_feedback") or ""),
+                "common_errors": str(data.get("common_errors") or data.get("common_mistakes") or data.get("mistakes") or ""),
+                "strengths": str(data.get("strengths") or ""),
+                "weaknesses": str(data.get("weaknesses") or ""),
+                "recommendations": str(data.get("recommendations") or ""),
             }
         return data
 
@@ -179,10 +164,10 @@ class PromptDrivenCodeReviewResponse(BaseModel):
     @classmethod
     def normalize_response(cls, data: Any) -> Any:
         if isinstance(data, dict):
-            reviews = data.get("individual_reviews")
-            if isinstance(reviews, dict):
-                reviews = list(reviews.values())
-            elif not isinstance(reviews, list):
-                reviews = []
-            data["individual_reviews"] = reviews
+            reviews_list = data.get("individual_reviews")
+            if isinstance(reviews_list, dict):
+                reviews_list = list(reviews_list.values())
+            elif not isinstance(reviews_list, list):
+                reviews_list = []
+            data["individual_reviews"] = reviews_list
         return data
