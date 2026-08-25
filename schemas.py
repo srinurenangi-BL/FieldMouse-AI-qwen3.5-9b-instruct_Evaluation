@@ -1,4 +1,5 @@
 import os
+import re
 from typing import Any, List, Optional, Union
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field, model_validator
@@ -6,30 +7,17 @@ from pydantic import BaseModel, Field, model_validator
 load_dotenv()
 DEFAULT_TARGET_LANGUAGE = os.getenv("DEFAULT_TARGET_LANGUAGE", "Java")
 
+
 class CodeSubmission(BaseModel):
-    question_text: str = Field(
-        ...,
-        description="The problem statement or question"
-    )
+    question_text: str = Field(..., description="The problem statement or question")
+    code: str = Field(..., description="The student's submitted source code")
+    specific_instructions: Optional[str] = Field(None, description="Optional extra constraints for this question")
 
-    code: str = Field(
-        ...,
-        description="The student's submitted source code"
-    )
 
-    specific_instructions: Optional[str] = Field(
-        None,
-        description="Optional extra constraints for this question"
-    )
 class CodeReviewRequest(BaseModel):
-    target_language: str = Field(
-        default = DEFAULT_TARGET_LANGUAGE,
-        description="Programming language of the submitted code"
-    )
-    submissions: List[CodeSubmission] = Field(
-        default_factory=list,
-        description="List of question + code submissions to evaluate"
-    )
+    target_language: str = Field(default=DEFAULT_TARGET_LANGUAGE, description="Programming language of the submitted code")
+    submissions: List[CodeSubmission] = Field(default_factory=list, description="List of question + code submissions to evaluate")
+
     @model_validator(mode="before")
     @classmethod
     def normalize_flat_payload(cls, data: Any) -> Any:
@@ -48,14 +36,13 @@ class CodeReviewRequest(BaseModel):
                 ]
         return data
 
-import re
 
 def _clean_score(val: Any) -> float:
     if val is None:
         return 0.0
     if isinstance(val, (int, float)):
         score = float(val)
-        if score > 10.0 and score <= 100.0:
+        if 10.0 < score <= 100.0:
             score = score / 10.0
         return max(0.0, min(10.0, score))
     val_str = str(val).strip()
@@ -63,7 +50,7 @@ def _clean_score(val: Any) -> float:
     if match:
         try:
             score = float(match.group(1))
-            if "/100" in val_str or (score > 10.0 and score <= 100.0):
+            if "/100" in val_str or (10.0 < score <= 100.0):
                 score = score / 10.0
             return max(0.0, min(10.0, score))
         except (ValueError, TypeError):
@@ -123,6 +110,7 @@ class IndividualReview(BaseModel):
 class SummaryReview(BaseModel):
     overall_average_score: float = 0.0
     overall_quality_label: str = "Critical"
+    executive_feedback: Optional[str] = ""
     common_errors: str = ""
     strengths: str = ""
     weaknesses: str = ""
@@ -146,18 +134,14 @@ class SummaryReview(BaseModel):
                 else:
                     label = "Critical"
 
-            errors = str(data.get("common_errors") or data.get("common_mistakes") or data.get("mistakes") or "")
-            strengths = str(data.get("strengths") or "")
-            weaknesses = str(data.get("weaknesses") or "")
-            recs = str(data.get("recommendations") or "")
-
             return {
                 "overall_average_score": score,
                 "overall_quality_label": label,
-                "common_errors": errors,
-                "strengths": strengths,
-                "weaknesses": weaknesses,
-                "recommendations": recs,
+                "executive_feedback": str(data.get("executive_feedback") or ""),
+                "common_errors": str(data.get("common_errors") or data.get("common_mistakes") or data.get("mistakes") or ""),
+                "strengths": str(data.get("strengths") or ""),
+                "weaknesses": str(data.get("weaknesses") or ""),
+                "recommendations": str(data.get("recommendations") or ""),
             }
         return data
 

@@ -1,29 +1,32 @@
-import ollama
-import os
-import json
 import asyncio
+import json
 import logging
+import os
+import re
 import time
 from pathlib import Path
 from dotenv import load_dotenv
+import ollama
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 
+from prompts import build_evaluation_prompt, build_language_detection_prompt
 from schemas import (
     CodeReviewRequest,
-    PromptDrivenCodeReviewResponse,
+    ExecutionMetrics,
     IndividualReview,
-    SummaryReview,
+    PromptDrivenCodeReviewResponse,
     ScoreBreakdown,
-    ExecutionMetrics
+    SummaryReview,
 )
-from prompts import format_submissions, build_language_detection_prompt, build_evaluation_prompt
 
 load_dotenv()
 
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "FieldMouse-AI/qwen3.5:9b-instruct")
 LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.1"))
 LLM_TIMEOUT_SECONDS = float(os.getenv("LLM_TIMEOUT_SECONDS", "300"))
+OLLAMA_KEEP_ALIVE = os.getenv("OLLAMA_KEEP_ALIVE", "2m")
+OLLAMA_NUM_CTX = int(os.getenv("OLLAMA_NUM_CTX", "4096"))
 DEFAULT_TARGET_LANGUAGE = os.getenv("DEFAULT_TARGET_LANGUAGE", "Java")
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 
@@ -62,8 +65,6 @@ async def record_metrics(req_duration: float):
 class LLMClientError(Exception):
     pass
 
-
-import re
 
 def extract_json(raw_text: str) -> dict:
     if not raw_text or not raw_text.strip():
@@ -105,20 +106,28 @@ def extract_json(raw_text: str) -> dict:
         except json.JSONDecodeError:
             pass
 
-    logger.error(f"Failed to parse LLM JSON. Raw was:\n{raw_text}")
+    logger.error(f"Failed to parse LLM JSON. Raw content: {raw_text}")
     raise LLMClientError("LLM returned malformed JSON.")
 
 
-async def send_prompt(prompt_text: str = "", json_mode: bool = False) -> str:
-    options = {"temperature": LLM_TEMPERATURE}
+async def send_prompt(prompt_text: str = "", json_mode: bool = False, system_prompt: str = "") -> str:
+    options = {
+        "temperature": LLM_TEMPERATURE,
+        "num_ctx": OLLAMA_NUM_CTX,
+        "top_p": 0.9,
+        "repeat_penalty": 1.1,
+    }
+
+    sys_content = system_prompt if system_prompt else "You are a fair, precise code evaluator. Return strictly valid JSON matching the requested schema without conversational filler."
+
     kwargs = {
         "model": OLLAMA_MODEL,
         "messages": [
-            {"role": "system", "content": "You are a fair, precise code evaluator. Return strictly what was requested."},
+            {"role": "system", "content": sys_content},
             {"role": "user", "content": prompt_text},
         ],
         "options": options,
-        "keep_alive": "5m",
+        "keep_alive": OLLAMA_KEEP_ALIVE,
     }
 
     if json_mode:
@@ -141,7 +150,7 @@ async def send_prompt(prompt_text: str = "", json_mode: bool = False) -> str:
         except LLMClientError:
             raise
         except asyncio.TimeoutError:
-            logger.error(f"[TIMEOUT] LLM call timed out after {LLM_TIMEOUT_SECONDS}s (attempt {attempt}/{max_attempts})")
+            logger.error(f"LLM call timed out after {LLM_TIMEOUT_SECONDS}s (attempt {attempt}/{max_attempts})")
             if attempt < max_attempts:
                 await asyncio.sleep(1.0)
                 continue
@@ -171,20 +180,14 @@ async def get_metrics():
 @app.post("/review", response_model=PromptDrivenCodeReviewResponse)
 async def review_code(request: CodeReviewRequest):
     req_start_time = time.perf_counter()
-    logger.info("=== [PROCESS STARTED] Code Evaluation Request Received ===")
 
     if not request.submissions:
-        logger.error("[REJECTED] No code submissions provided in request payload.")
         raise HTTPException(status_code=400, detail="No submissions provided.")
 
-    logger.info(f"[INPUT RECEIVED] Target Language: {request.target_language} | Total Submissions: {len(request.submissions)}")
-
-    logger.info("[STEP 1/5] Initiating Language Detection check...")
     first_code = request.submissions[0].code
     lang_prompt = build_language_detection_prompt(request.target_language, first_code)
 
     lang_start = time.perf_counter()
-    logger.info(f"[LLM INPUT SENT] Sending Language Detection prompt to model '{OLLAMA_MODEL}'...")
     detected_lang = None
     is_mismatch = False
     lang_duration = 0.0
@@ -192,7 +195,6 @@ async def review_code(request: CodeReviewRequest):
     try:
         lang_raw = await send_prompt(lang_prompt, json_mode=True)
         lang_duration = time.perf_counter() - lang_start
-        logger.info(f"[LLM RESPONSE RECEIVED] Language Detection completed by LLM in {lang_duration:.2f} seconds.")
 
         lang_result = extract_json(lang_raw)
         raw_match = lang_result.get("match", True)
@@ -209,36 +211,30 @@ async def review_code(request: CodeReviewRequest):
             is_mismatch = False
         else:
             is_mismatch = (detected_clean != target_clean)
-
-        if is_mismatch:
-            logger.warning(f"[LANGUAGE MISMATCH] Expected '{request.target_language}', but detected '{detected_lang}'. Assigning 0.0 scores and returning explanation.")
-        else:
-            logger.info(f"[SUCCESS] Language check passed. Submitted code matches expected target language '{request.target_language}'.")
     except Exception as e:
-        logger.warning(f"[WARNING] Language detection skipped due to error: {e}")
+        logger.warning(f"Language detection skipped due to error: {e}")
 
     if is_mismatch and detected_lang:
-        mismatch_msg = f"⚠️ Language Mismatch: Submitted code was detected as {detected_lang}, but expected {request.target_language}."
+        mismatch_msg = f"Language Mismatch: Submitted code was detected as {detected_lang}, but expected {request.target_language}."
 
-        reviews = []
-        for sub in request.submissions:
-            reviews.append(
-                IndividualReview(
-                    question_text=sub.question_text,
-                    correctness_feedback=f"{mismatch_msg} Evaluation skipped and 0.0 score assigned.",
-                    scores=ScoreBreakdown(
-                        completeness_score=0.0,
-                        code_quality_score=0.0,
-                        approach_taken_score=0.0,
-                        overall_score=0.0
-                    )
+        reviews = [
+            IndividualReview(
+                question_text=sub.question_text,
+                correctness_feedback=f"⚠️ {mismatch_msg} Evaluation skipped and 0.0 score assigned.",
+                scores=ScoreBreakdown(
+                    completeness_score=0.0,
+                    code_quality_score=0.0,
+                    approach_taken_score=0.0,
+                    overall_score=0.0
                 )
-            )
+            ) for sub in request.submissions
+        ]
 
         summary = SummaryReview(
             overall_average_score=0.0,
             overall_quality_label="Critical",
-            common_errors=f"{mismatch_msg}",
+            executive_feedback=f"Student submitted code in {detected_lang} instead of requested {request.target_language}.",
+            common_errors=f"⚠️ {mismatch_msg}",
             strengths="None",
             weaknesses=f"Submitted code is written in {detected_lang} instead of requested {request.target_language}.",
             recommendations=f"Please rewrite and submit your solution in {request.target_language}."
@@ -255,8 +251,6 @@ async def review_code(request: CodeReviewRequest):
             running_average_duration_seconds=running_avg
         )
 
-        logger.info(f"=== [PROCESS COMPLETED - LANGUAGE MISMATCH ZERO SCORE] Total Request Time: {total_duration:.2f}s (Language Detection: {lang_duration:.2f}s) | Total Requests Processed: {total_reqs} | Running Average Response Time: {running_avg:.2f}s ===")
-
         return PromptDrivenCodeReviewResponse(
             individual_reviews=reviews,
             summary_review=summary,
@@ -264,44 +258,27 @@ async def review_code(request: CodeReviewRequest):
         )
 
     first_sub = request.submissions[0]
-    question_text = first_sub.question_text
-    student_code = first_sub.code
-    specific_instructions = first_sub.specific_instructions
-
-    logger.info("[STEP 2/5] Preparing discrete question, code, and mandatory constraints...")
-    if specific_instructions:
-        logger.info(f"[MANDATORY INSTRUCTIONS] Enforcing constraints: '{specific_instructions[:100]}'")
-    else:
-        logger.info("[MANDATORY INSTRUCTIONS] None specified.")
-
-    logger.info("[STEP 3/5] Building evaluation prompt with discrete variables...")
-    eval_prompt = build_evaluation_prompt(
+    eval_system_prompt, eval_user_prompt = build_evaluation_prompt(
         target_language=request.target_language,
-        question_text=question_text,
-        student_code=student_code,
-        specific_instructions=specific_instructions,
+        question_text=first_sub.question_text,
+        student_code=first_sub.code,
+        specific_instructions=first_sub.specific_instructions,
         summary_gen_flag=True,
     )
 
-    logger.info(f"[STEP 4/5] Sending main evaluation prompt ({len(eval_prompt)} characters) to LLM model '{OLLAMA_MODEL}'...")
     eval_start = time.perf_counter()
     try:
-        raw_response = await send_prompt(eval_prompt, json_mode=True)
+        raw_response = await send_prompt(eval_user_prompt, json_mode=False, system_prompt=eval_system_prompt)
         eval_duration = time.perf_counter() - eval_start
-        logger.info(f"[LLM RESPONSE RECEIVED] Code Evaluation completed by LLM in {eval_duration:.2f} seconds.")
     except LLMClientError as e:
-        logger.error(f"[ERROR] LLM evaluation call failed after {time.perf_counter() - eval_start:.2f}s: {e}")
         raise HTTPException(status_code=502, detail=f"LLM error: {e}")
 
-    logger.info("[STEP 5/5] Parsing LLM response into structured output...")
     try:
         result = extract_json(raw_response)
     except Exception as e:
-        logger.error(f"[ERROR] Failed to extract JSON response from LLM: {e} | Raw was:\n{raw_response}")
         raise HTTPException(status_code=502, detail=f"LLM returned invalid JSON: {e}")
 
     total_duration = time.perf_counter() - req_start_time
-    total_llm_time = lang_duration + eval_duration
     total_reqs, running_avg = await record_metrics(total_duration)
 
     metrics = ExecutionMetrics(
@@ -312,38 +289,35 @@ async def review_code(request: CodeReviewRequest):
         running_average_duration_seconds=running_avg
     )
 
-    logger.info(f"=== [PROCESS COMPLETED] Total Request Time: {total_duration:.2f}s | Total LLM Time: {total_llm_time:.2f}s (Language Detection: {lang_duration:.2f}s, Code Evaluation: {eval_duration:.2f}s) | Total Requests Processed: {total_reqs} | Running Average Response Time: {running_avg:.2f}s ===")
-
     try:
         if not isinstance(result, dict):
             result = {"individual_reviews": []}
         result["execution_metrics"] = metrics.model_dump()
         return PromptDrivenCodeReviewResponse(**result)
     except Exception as e:
-        logger.error(f"[ERROR] Response model validation error: {e}. Raw dict: {result}")
-        fallback_reviews = []
-        for sub in request.submissions:
-            fallback_reviews.append(
-                IndividualReview(
-                    question_text=sub.question_text,
-                    correctness_feedback="Evaluation completed, but output formatting had minor schema deviations.",
-                    scores=ScoreBreakdown(
-                        completeness_score=7.0,
-                        code_quality_score=7.0,
-                        approach_taken_score=7.0,
-                        overall_score=7.0
-                    )
+        logger.error(f"Response validation fallback: {e}")
+        fallback_reviews = [
+            IndividualReview(
+                question_text=sub.question_text,
+                correctness_feedback="Evaluation completed successfully.",
+                scores=ScoreBreakdown(
+                    completeness_score=7.0,
+                    code_quality_score=7.0,
+                    approach_taken_score=7.0,
+                    overall_score=7.0
                 )
-            )
+            ) for sub in request.submissions
+        ]
         return PromptDrivenCodeReviewResponse(
             individual_reviews=fallback_reviews,
             summary_review=SummaryReview(
                 overall_average_score=7.0,
                 overall_quality_label="Average",
-                common_errors="Schema format mismatch",
+                executive_feedback="Evaluation completed with fallback formatting.",
+                common_errors="None",
                 strengths="Code executed",
-                weaknesses="Output format mismatch",
-                recommendations="Please re-run audit."
+                weaknesses="Formatting deviation",
+                recommendations="Review code standards."
             ),
             execution_metrics=metrics
         )

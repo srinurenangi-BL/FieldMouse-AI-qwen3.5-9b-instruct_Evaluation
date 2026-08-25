@@ -1187,9 +1187,8 @@
                     document.getElementById('apprFill').style.width = Math.min(appr * 10, 100) + '%';
                 }, 100);
 
-                // Save data for modal popups
                 evaluationData = {
-                    feedback: item.correctness_feedback || "None",
+                    feedback: summary.executive_feedback || item.correctness_feedback || "None",
                     errors: summary.common_errors || "None",
                     strengths: summary.strengths || "None",
                     weaknesses: summary.weaknesses || "None",
